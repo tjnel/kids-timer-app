@@ -27,16 +27,19 @@ const CRUMBS = Array.from({ length: 6 }, (_, i) => ({
 
 /**
  * Picks the column count whose cells fill the box best. Ties go to the layout
- * with fewer empty cells, then to more columns.
+ * with fewer empty cells, then to the one that follows the box's orientation
+ * (wider on landscape screens, taller on portrait ones).
  */
 export function fitGrid(count: number, width: number, height: number, maxCell: number) {
+  const landscape = width >= height
   let best = { cols: 1, pitch: 0, empty: Infinity }
   for (let cols = 1; cols <= count; cols++) {
     const rows = Math.ceil(count / cols)
     const pitch = Math.min(width / cols, height / rows, maxCell)
     const empty = cols * rows - count
+    const tie = Math.abs(pitch - best.pitch) <= 0.5
     const better =
-      pitch > best.pitch + 0.5 || (Math.abs(pitch - best.pitch) <= 0.5 && empty < best.empty)
+      pitch > best.pitch + 0.5 || (tie && (empty < best.empty || (empty === best.empty && landscape)))
     if (better) best = { cols, pitch, empty }
   }
   const gap = Math.round(best.pitch * GAP_RATIO)
@@ -49,7 +52,7 @@ export function TimerGrid({
   theme,
   isRunning,
   currentIntervalProgress,
-  maxCell = 150,
+  maxCell = 200,
 }: TimerGridProps) {
   const reduceMotion = useReducedMotion()
   const boxRef = useRef<HTMLDivElement>(null)
@@ -75,22 +78,31 @@ export function TimerGrid({
   const isEating = !arrived && intervalActive && currentIntervalProgress >= 0.08
   const isMoving = (!arrived && intervalActive && currentIntervalProgress < 0.08) || arrived
 
+  // The character is one persistent element positioned over the grid from the
+  // known cell geometry, so moving to the next cell is a plain x/y animation.
+  const pitch = cell + gap
+  const place = theme === "mouse" ? { left: -0.06, bottom: -0.04, size: 0.6 } : { left: 0.08, bottom: 0.08, size: 0.84 }
+  const characterSize = cell * place.size
+  const characterX = (characterIndex % cols) * pitch + place.left * cell + (arrived ? 0.3 * cell : 0)
+  const characterY =
+    Math.floor(characterIndex / cols) * pitch + cell - characterSize - place.bottom * cell - (arrived ? 0.1 * cell : 0)
+
   const character = (
     <motion.div
-      layoutId="runner"
-      className="pointer-events-none absolute z-10"
-      style={
-        theme === "mouse"
-          ? { left: "-6%", bottom: "-4%", width: "60%", height: "60%" }
-          : { left: "8%", bottom: "8%", width: "84%", height: "84%" }
-      }
-      animate={arrived ? { scale: 0.15, opacity: 0, x: "30%", y: "-10%" } : { scale: 1, opacity: 1, x: 0, y: 0 }}
-      transition={{
-        layout: reduceMotion ? { duration: 0 } : TRAVEL,
-        default: reduceMotion
+      data-testid="runner"
+      className="pointer-events-none absolute top-0 left-0 z-10"
+      style={{ width: characterSize, height: characterSize }}
+      initial={false}
+      animate={{ x: characterX, y: characterY, scale: arrived ? 0.15 : 1, opacity: arrived ? 0 : 1 }}
+      transition={
+        reduceMotion
           ? { duration: 0 }
-          : { duration: 0.6 / ANIM_SPEED, delay: arrived ? 0.25 / ANIM_SPEED : 0, ease: "easeIn" },
-      }}
+          : {
+              x: TRAVEL,
+              y: TRAVEL,
+              default: { duration: 0.6 / ANIM_SPEED, delay: arrived ? 0.25 / ANIM_SPEED : 0, ease: "easeIn" },
+            }
+      }
     >
       <motion.div
         key={completedIntervals}
@@ -111,12 +123,20 @@ export function TimerGrid({
     <div
       ref={boxRef}
       role="img"
-      aria-label={`${completedIntervals} of ${totalIntervals} ${theme === "mouse" ? "cheese pieces eaten" : "cones passed"}`}
+      aria-label={`${completedIntervals} of ${totalIntervals} ${
+        theme === "mouse"
+          ? totalIntervals === 1
+            ? "cheese piece eaten"
+            : "cheese pieces eaten"
+          : totalIntervals === 1
+            ? "cone passed"
+            : "cones passed"
+      }`}
       className="flex size-full min-h-0 items-center justify-center"
     >
       {cell > 0 && (
         <div
-          className="grid"
+          className="relative grid"
           style={{
             gridTemplateColumns: `repeat(${cols}, ${cell}px)`,
             gridAutoRows: `${cell}px`,
@@ -159,8 +179,6 @@ export function TimerGrid({
                     isBeingPassed={isCurrent && isRunning}
                   />
                 )}
-
-                {characterIndex === i && character}
               </div>
             )
           })}
@@ -175,8 +193,9 @@ export function TimerGrid({
             ) : (
               <FinishFlag className="size-full" />
             )}
-            {characterIndex === totalIntervals && character}
           </motion.div>
+
+          {character}
         </div>
       )}
     </div>

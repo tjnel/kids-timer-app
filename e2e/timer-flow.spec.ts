@@ -131,12 +131,24 @@ test.describe("Kids mouse timer", () => {
     await page.goto(SHORT_RUN_URL)
     await expect(page.getByText("0:06")).toBeVisible()
     await startTimer(page)
+    const runner = page.getByTestId("runner")
+    await expect(page.getByRole("img", { name: "0 of 1 cheese piece eaten" })).toBeVisible()
+    const startBox = await runner.boundingBox()
+    if (!startBox) throw new Error("Runner has no box")
 
     await expect(page.getByRole("heading", { name: "All done!" })).toBeVisible({
       timeout: SHORT_RUN_TIMEOUT,
     })
     await expect(page.getByText("The mouse ate every piece and went home.")).toBeVisible()
     await expect(page.getByTestId("play-again")).toBeFocused()
+
+    // The mouse travelled from the cheese to the hole (one cell to the right).
+    await expect
+      .poll(async () => {
+        const box = await runner.boundingBox()
+        return box ? box.x + box.width / 2 - (startBox.x + startBox.width / 2) : 0
+      })
+      .toBeGreaterThan(40)
 
     await page.getByTestId("play-again").click()
 
