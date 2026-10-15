@@ -44,8 +44,8 @@ export function KidsTimer() {
     if (!raw) return
     const mins = Number(raw)
     if (!Number.isFinite(mins)) return
-    const stepped = Math.round(mins * 2) / 2
-    const clamped = Math.max(0.5, Math.min(15, stepped))
+    // The URL accepts runs as short as 6 seconds so a full run can be exercised quickly.
+    const clamped = Math.max(0.1, Math.min(15, Math.round(mins * 10) / 10))
     setSelectedMinutes(clamped)
     if (clamped < 1) setIntervalType("30sec")
   }, [])

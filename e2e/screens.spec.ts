@@ -1,6 +1,6 @@
 import path from "node:path"
 
-import { expect, fastForward, type Page, test } from "./fixtures"
+import { expect, type Page, SHORT_RUN_TIMEOUT, SHORT_RUN_URL, test } from "./fixtures"
 
 /**
  * Walks every screen, runs axe on it, and saves a screenshot per viewport.
@@ -32,13 +32,13 @@ test.describe("Screens", () => {
   })
 
   test("celebration", async ({ page, checkA11y }, testInfo) => {
-    await page.clock.install()
-    await page.goto("/?minutes=0.5")
+    await page.goto(SHORT_RUN_URL)
     await page.getByRole("button", { name: "Start timer" }).click()
     await expect(page.getByTestId("remaining-time")).toBeVisible()
-    await fastForward(page, 31_000)
-    await expect(page.getByRole("heading", { name: "All done!" })).toBeVisible()
-    await fastForward(page, 1_200)
+    await expect(page.getByRole("heading", { name: "All done!" })).toBeVisible({
+      timeout: SHORT_RUN_TIMEOUT,
+    })
+    await page.waitForTimeout(1_200)
     await shoot(page, "celebration", testInfo.project.name, testInfo.outputDir)
     await checkA11y("celebration")
   })

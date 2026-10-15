@@ -49,7 +49,7 @@ export default function RootLayout({
       <body className={`${nunito.variable} font-sans antialiased bg-[#f2f8f4]`}>
         {children}
         <ServiceWorkerRegister />
-        {process.env.NODE_ENV === 'production' && <Analytics />}
+        {process.env.NEXT_PUBLIC_VERCEL_ENV && <Analytics />}
       </body>
     </html>
   )

@@ -1,4 +1,4 @@
-import { expect, fastForward, type Page, test } from "./fixtures"
+import { expect, type Page, SHORT_RUN_TIMEOUT, SHORT_RUN_URL, test } from "./fixtures"
 
 function parseClock(text: string) {
   const [minutes, seconds] = text.split(":").map(Number)
@@ -100,21 +100,20 @@ test.describe("Kids mouse timer", () => {
   })
 
   test("completing the timer then Play Again returns to a full setup", async ({ page }) => {
-    await page.clock.install()
-    await page.goto("/?minutes=0.5")
-    await expect(page.getByText("0:30")).toBeVisible()
+    await page.goto(SHORT_RUN_URL)
+    await expect(page.getByText("0:06")).toBeVisible()
     await startTimer(page)
 
-    await fastForward(page, 31_000)
-
-    await expect(page.getByRole("heading", { name: "All done!" })).toBeVisible()
+    await expect(page.getByRole("heading", { name: "All done!" })).toBeVisible({
+      timeout: SHORT_RUN_TIMEOUT,
+    })
     await expect(page.getByText("The mouse ate every piece and went home.")).toBeVisible()
 
     await page.getByTestId("play-again").click()
 
     await expect(page.getByRole("heading", { name: "All done!" })).toHaveCount(0)
     await expect(page.getByRole("button", { name: "Start timer" })).toBeVisible()
-    await expect(page.getByText("0:30", { exact: true }).first()).toBeVisible()
+    await expect(page.getByText("0:06", { exact: true }).first()).toBeVisible()
     await expect(page.getByText("The mouse eats cheese, then runs home.")).toBeVisible()
   })
 

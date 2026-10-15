@@ -64,7 +64,11 @@ export const test = base.extend<Fixtures>({
 export { expect }
 export type { Page }
 
-/** Advances fake timers so the timer completes without real waiting. */
-export async function fastForward(page: Page, ms: number) {
-  await page.clock.runFor(ms)
-}
+/**
+ * A six-second run reaches the celebration quickly. Playwright's fake clock
+ * cannot be used instead: framer-motion drives exits through the Web
+ * Animations API and syncs their start times to the faked performance.now(),
+ * so after a clock jump every exit animation sits tens of seconds in the future.
+ */
+export const SHORT_RUN_URL = "/?minutes=0.1"
+export const SHORT_RUN_TIMEOUT = 15_000

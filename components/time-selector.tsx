@@ -21,7 +21,7 @@ export function TimeSelector({
   const maxMinutes = 15
   const minMinutes = intervalType === "1min" ? 1 : 0.5
   const step = intervalType === "1min" ? 1 : 0.5
-  const sliderPosition = (minutes - minMinutes) / (maxMinutes - minMinutes)
+  const sliderPosition = Math.max(0, Math.min(1, (minutes - minMinutes) / (maxMinutes - minMinutes)))
 
   const formatTime = (mins: number) => {
     const totalMins = Math.floor(mins)
