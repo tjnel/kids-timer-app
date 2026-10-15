@@ -4,12 +4,13 @@ import { useEffect, useState, useSyncExternalStore } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { ArrowLeft, Volume2, VolumeX } from "lucide-react"
 import { useKidsAudio } from "@/hooks/use-kids-audio"
-import { formatClock, intervalsFor, type IntervalType, useTimer } from "@/hooks/use-timer"
+import { formatClock, intervalsFor, type IntervalType, snapMinutes, useTimer } from "@/hooks/use-timer"
 import { useTimerFeedback } from "@/hooks/use-timer-feedback"
 import { useWakeLock } from "@/hooks/use-wake-lock"
 import { CelebrationOverlay } from "./celebration-overlay"
 import { FlashOverlay } from "./flash-overlay"
 import { IconButton } from "./icon-button"
+import { IntervalToggle } from "./interval-toggle"
 import { PauseButton } from "./pause-button"
 import { THEMES, type ThemeType } from "./theme"
 import { ThemeSelector } from "./theme-selector"
@@ -73,6 +74,11 @@ export function KidsTimer() {
     timer.start()
   }
 
+  const handleIntervalChange = (type: IntervalType) => {
+    setIntervalType(type)
+    setChosenMinutes(snapMinutes(selectedMinutes, type))
+  }
+
   const spec = THEMES[theme]
   const muteButton = (
     <IconButton label={audio.muted ? "Unmute sounds" : "Mute sounds"} pressed={audio.muted} onClick={audio.toggleMuted}>
@@ -81,7 +87,7 @@ export function KidsTimer() {
   )
 
   return (
-    <div className="flex h-dvh flex-col overflow-hidden bg-background pt-[env(safe-area-inset-top)] text-foreground">
+    <div className="flex h-dvh flex-col overflow-hidden bg-background pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)] text-foreground">
       <AnimatePresence mode="wait" initial={false}>
         {setup ? (
           <motion.div
@@ -92,26 +98,33 @@ export function KidsTimer() {
             transition={VIEW_FADE}
             className="flex min-h-0 flex-1 flex-col"
           >
-            <header className="flex shrink-0 items-center justify-between px-4 py-3">
-              <div className="flex items-center gap-2">
-                {theme === "mouse" ? <Mouse className="size-9" /> : <RaceCar className="h-7 w-11" />}
-                <h1 className="text-xl font-extrabold tracking-tight">{spec.title}</h1>
+            <header className="flex shrink-0 items-center justify-between px-4 py-2 sm:py-3 short:py-1.5">
+              <div className="flex min-w-0 items-center gap-2">
+                {theme === "mouse" ? <Mouse className="size-9 shrink-0" /> : <RaceCar className="h-7 w-11 shrink-0" />}
+                <h1 className="truncate text-xl font-extrabold tracking-tight">{spec.title}</h1>
               </div>
               {muteButton}
             </header>
 
-            <main className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-4 pb-2">
-              <div className="mx-auto my-auto flex w-full max-w-lg flex-col items-center gap-4 py-1 sm:gap-6">
-                <ThemeSelector theme={theme} onThemeChange={setTheme} />
-                <TimeSelector
-                  minutes={selectedMinutes}
-                  onMinutesChange={setChosenMinutes}
-                  intervalType={intervalType}
-                  onIntervalTypeChange={setIntervalType}
-                />
-                <div className="w-full">
-                  <p className="mb-2 text-center text-base font-semibold text-foreground-strong">{spec.hint}</p>
-                  <div className="h-20 w-full sm:h-24">
+            {/*
+              One column on phones and tablets. Landscape phones have no height to
+              spare, so the time controls move into a second column and the
+              preview is dropped.
+            */}
+            <main className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-4">
+              <div className="mx-auto my-auto grid w-full max-w-lg grid-cols-1 justify-items-center gap-3 py-1 sm:gap-5 md:max-w-xl short:max-w-4xl short:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] short:items-center short:gap-x-8 short:gap-y-3">
+                <div className="w-full min-w-0 short:col-start-1 short:row-start-1">
+                  <ThemeSelector theme={theme} onThemeChange={setTheme} />
+                </div>
+                <div className="short:col-start-1 short:row-start-2">
+                  <IntervalToggle value={intervalType} onChange={handleIntervalChange} />
+                </div>
+                <div className="w-full min-w-0 short:col-start-2 short:row-span-3 short:row-start-1">
+                  <TimeSelector minutes={selectedMinutes} onMinutesChange={setChosenMinutes} intervalType={intervalType} />
+                </div>
+                <div className="w-full min-w-0 short:col-start-1 short:row-start-3">
+                  <p className="mb-2 text-center text-base font-semibold text-foreground-strong short:mb-0">{spec.hint}</p>
+                  <div className="h-16 w-full sm:h-24 md:h-28 short:hidden">
                     <TimerGrid
                       totalIntervals={intervalsFor(selectedMinutes, intervalType)}
                       completedIntervals={0}
@@ -125,16 +138,16 @@ export function KidsTimer() {
               </div>
             </main>
 
-            <div className="flex shrink-0 justify-center px-4 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))]">
+            <div className="flex shrink-0 justify-center px-4 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] short:pt-1 short:pb-[max(0.5rem,env(safe-area-inset-bottom))]">
               <motion.button
                 type="button"
                 aria-label="Start timer"
                 whileTap={{ scale: 0.96 }}
                 onClick={handleStart}
-                className="flex min-h-14 items-center gap-2 rounded-full bg-primary py-3 pr-6 pl-8 text-xl font-extrabold text-primary-foreground shadow-[0_5px_0_rgba(46,26,8,0.3)] focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-foreground-strong"
+                className="flex min-h-14 items-center gap-2 rounded-full bg-primary py-3 pr-6 pl-8 text-xl font-extrabold text-primary-foreground shadow-[0_5px_0_rgba(46,26,8,0.3)] focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-foreground-strong md:min-h-16 md:text-2xl short:min-h-12 short:py-2"
               >
                 Start
-                {theme === "mouse" ? <Cheese className="size-8" /> : <FinishFlag className="size-8" />}
+                {theme === "mouse" ? <Cheese className="size-8 shrink-0" /> : <FinishFlag className="size-8 shrink-0" />}
               </motion.button>
             </div>
           </motion.div>
@@ -148,32 +161,35 @@ export function KidsTimer() {
             className="flex min-h-0 flex-1 flex-col"
           >
             <h1 className="sr-only">{spec.title}</h1>
-            <header className="flex shrink-0 items-center justify-between px-3 py-2 sm:px-5 sm:py-3">
+            <header className="flex shrink-0 items-center justify-between px-3 py-2 sm:px-5 sm:py-3 short:py-1">
               <div className="flex items-center gap-1">
                 <IconButton label="Back to setup" onClick={timer.reset}>
                   <ArrowLeft className="size-7" strokeWidth={2.75} />
                 </IconButton>
                 {muteButton}
               </div>
-              <p className="pr-2 text-3xl font-extrabold tracking-tight tabular-nums sm:text-4xl">
+              <p className="pr-2 text-3xl font-extrabold tracking-tight tabular-nums sm:text-4xl md:text-5xl short:text-3xl">
                 <span className="sr-only">Time left </span>
                 <span data-testid="remaining-time">{formatClock(timer.remainingSeconds)}</span>
               </p>
             </header>
 
-            <main className="min-h-0 flex-1 px-3 py-1 sm:px-8">
-              <TimerGrid
-                totalIntervals={timer.totalIntervals}
-                completedIntervals={timer.completedIntervals}
-                theme={theme}
-                isRunning={timer.isRunning}
-                currentIntervalProgress={timer.currentIntervalProgress}
-              />
-            </main>
+            {/* The pause control sits under the grid, or beside it when the screen is short. */}
+            <div className="flex min-h-0 flex-1 flex-col short:flex-row">
+              <main className="min-h-0 flex-1 px-3 py-1 sm:px-8 short:px-4 short:py-2">
+                <TimerGrid
+                  totalIntervals={timer.totalIntervals}
+                  completedIntervals={timer.completedIntervals}
+                  theme={theme}
+                  isRunning={timer.isRunning}
+                  currentIntervalProgress={timer.currentIntervalProgress}
+                />
+              </main>
 
-            <footer className="flex shrink-0 justify-center pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
-              <PauseButton isRunning={timer.isRunning} onPause={timer.pause} onPlay={timer.start} />
-            </footer>
+              <footer className="flex shrink-0 justify-center pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] short:items-center short:px-6 short:pt-0 short:pb-0">
+                <PauseButton isRunning={timer.isRunning} onPause={timer.pause} onPlay={timer.start} />
+              </footer>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

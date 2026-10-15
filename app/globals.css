@@ -1,5 +1,8 @@
 @import 'tailwindcss';
 
+/* Landscape phones: too little height for the stacked layouts, so they go side by side. */
+@custom-variant short (@media (max-height: 30rem));
+
 /*
  * Warm "mouse world" palette, sampled from the reference app:
  * one tan screen, dark brown text and controls, apple red accents,

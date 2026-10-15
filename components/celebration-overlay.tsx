@@ -37,35 +37,35 @@ export function CelebrationOverlay({ theme, onClose }: { theme: ThemeType; onClo
         initial={{ scale: 0.7, y: 40, opacity: 0 }}
         animate={{ scale: 1, y: 0, opacity: 1 }}
         transition={{ type: "spring", duration: 0.7, bounce: 0.45 }}
-        className="relative z-10 w-full max-w-sm rounded-[1.75rem] bg-card p-6 text-center text-card-foreground shadow-2xl sm:p-8"
+        className="relative z-10 max-h-[calc(100dvh-2rem)] w-full max-w-sm overflow-y-auto rounded-[1.75rem] bg-card p-6 text-center text-card-foreground shadow-2xl sm:p-8 short:p-4"
         onClick={(event) => event.stopPropagation()}
       >
         <motion.div
           animate={reduceMotion ? {} : { y: [0, -10, 0] }}
           transition={{ type: "tween", duration: 0.8, repeat: reduceMotion ? 0 : 3, ease: "easeOut" }}
-          className="relative mx-auto mb-5 size-28 sm:size-32"
+          className="relative mx-auto mb-5 size-28 sm:size-32 short:mb-2 short:size-20"
         >
           {theme === "mouse" ? (
             <>
               <Mouse className="size-full" />
-              <div className="absolute -top-1 -right-1 size-12">
+              <div className="absolute -top-1 -right-1 size-12 short:size-9">
                 <MouseHole className="size-full" arrived />
               </div>
             </>
           ) : (
             <>
               <RaceCar className="size-full" />
-              <div className="absolute -top-1 -right-1 size-12">
+              <div className="absolute -top-1 -right-1 size-12 short:size-9">
                 <FinishFlag className="size-full" />
               </div>
             </>
           )}
         </motion.div>
 
-        <h2 id="celebration-title" className="mb-2 text-3xl font-extrabold tracking-tight sm:text-4xl">
+        <h2 id="celebration-title" className="mb-2 text-3xl font-extrabold tracking-tight sm:text-4xl short:mb-1 short:text-2xl">
           {doneTitle}
         </h2>
-        <p className="mb-6 text-base text-muted-foreground">{doneBody}</p>
+        <p className="mb-6 text-base text-muted-foreground short:mb-3">{doneBody}</p>
         <button
           type="button"
           data-testid="play-again"

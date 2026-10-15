@@ -76,7 +76,7 @@ export function PauseButton({ isRunning, onPause, onPlay }: PauseButtonProps) {
         onLostPointerCapture={cancelHold}
         onContextMenu={(event) => event.preventDefault()}
         onClick={handleClick}
-        className="relative flex size-[4.5rem] items-center justify-center rounded-full bg-control text-control-foreground shadow-[0_6px_0_rgba(46,26,8,0.35)] select-none touch-none focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-foreground-strong active:translate-y-0.5 active:shadow-[0_4px_0_rgba(46,26,8,0.35)] sm:size-20"
+        className="relative flex size-[4.5rem] items-center justify-center rounded-full bg-control text-control-foreground shadow-[0_6px_0_rgba(46,26,8,0.35)] select-none touch-none focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-foreground-strong active:translate-y-0.5 active:shadow-[0_4px_0_rgba(46,26,8,0.35)] sm:size-20 md:size-24"
       >
         <svg viewBox="0 0 100 100" className="pointer-events-none absolute inset-0 size-full -rotate-90" aria-hidden="true">
           <circle
@@ -92,9 +92,13 @@ export function PauseButton({ isRunning, onPause, onPlay }: PauseButtonProps) {
             opacity={holdProgress > 0 ? 1 : 0}
           />
         </svg>
-        {isRunning ? <Pause className="size-8 fill-current sm:size-9" /> : <Play className="ml-1 size-8 fill-current sm:size-9" />}
+        {isRunning ? (
+          <Pause className="size-8 fill-current sm:size-9 md:size-11" />
+        ) : (
+          <Play className="ml-1 size-8 fill-current sm:size-9 md:size-11" />
+        )}
       </button>
-      <p className="text-sm font-semibold text-foreground-strong">{isRunning ? "Hold to pause" : "Tap to play"}</p>
+      <p className="text-base font-semibold text-foreground-strong">{isRunning ? "Hold to pause" : "Tap to play"}</p>
     </div>
   )
 }

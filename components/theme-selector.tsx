@@ -45,12 +45,12 @@ export function ThemeSelector({ theme, onThemeChange }: ThemeSelectorProps) {
             aria-checked={selected}
             whileTap={{ scale: 0.97 }}
             onClick={() => onThemeChange(option.value)}
-            className={`flex min-h-16 flex-1 flex-col items-center gap-1 rounded-2xl bg-card p-2 text-card-foreground ring-4 sm:min-h-20 sm:gap-2 sm:p-3 ${
+            className={`flex min-h-16 min-w-0 flex-1 flex-col items-center gap-1 rounded-2xl bg-card p-2 text-card-foreground ring-4 sm:min-h-20 sm:gap-2 sm:p-3 short:min-h-14 short:gap-1 short:p-2 ${
               selected ? "ring-primary shadow-[0_4px_0_rgba(46,26,8,0.25)]" : "ring-transparent opacity-80"
             } focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-foreground-strong`}
           >
-            <div className="flex items-center gap-2">{option.art}</div>
-            <p className="text-base font-bold">{option.label}</p>
+            <div className="flex shrink-0 items-center gap-2">{option.art}</div>
+            <p className="text-base/5 font-bold">{option.label}</p>
           </motion.button>
         )
       })}

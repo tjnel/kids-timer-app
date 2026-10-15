@@ -9,7 +9,6 @@ interface TimeSelectorProps {
   minutes: number
   onMinutesChange: (minutes: number) => void
   intervalType: IntervalType
-  onIntervalTypeChange: (type: IntervalType) => void
 }
 
 const PRESETS = [1, 2, 3, 5, 10, 15]
@@ -28,7 +27,7 @@ function tickLeft(value: number, minMinutes: number) {
   return ((value - minMinutes) / (MAX_MINUTES - minMinutes)) * 100
 }
 
-export function TimeSelector({ minutes, onMinutesChange, intervalType, onIntervalTypeChange }: TimeSelectorProps) {
+export function TimeSelector({ minutes, onMinutesChange, intervalType }: TimeSelectorProps) {
   const sliderRef = useRef<HTMLDivElement>(null)
   const [burst, setBurst] = useState(0)
   const lastBurstAt = useRef(0)
@@ -92,40 +91,14 @@ export function TimeSelector({ minutes, onMinutesChange, intervalType, onInterva
     change(target)
   }
 
-  const chooseInterval = (type: IntervalType) => {
-    onIntervalTypeChange(type)
-    onMinutesChange(snapMinutes(minutes, type))
-  }
-
   const ticks: number[] = []
   for (let value = Math.ceil(minMinutes); value <= MAX_MINUTES; value += 1) ticks.push(value)
   const firstTick = ticks[0] ?? MAX_MINUTES
 
   return (
-    <div className="flex w-full flex-col items-center gap-3 sm:gap-4">
-      <div role="radiogroup" aria-label="Piece length" className="flex gap-1 rounded-full bg-card p-1">
-        {(["30sec", "1min"] as const).map((type) => {
-          const selected = intervalType === type
-          return (
-            <motion.button
-              key={type}
-              type="button"
-              role="radio"
-              aria-checked={selected}
-              whileTap={{ scale: 0.96 }}
-              onClick={() => chooseInterval(type)}
-              className={`min-h-11 min-w-24 rounded-full px-4 py-2 text-sm font-bold focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-foreground-strong ${
-                selected ? "bg-primary text-primary-foreground" : "text-card-foreground"
-              }`}
-            >
-              {type === "30sec" ? "30 sec" : "1 min"}
-            </motion.button>
-          )
-        })}
-      </div>
-
+    <div className="flex w-full min-w-0 flex-col items-center gap-3 sm:gap-4 short:gap-1">
       <div className="text-center">
-        <p className="text-5xl font-extrabold tracking-tight text-foreground tabular-nums sm:text-6xl">
+        <p className="text-5xl font-extrabold tracking-tight text-foreground tabular-nums sm:text-6xl short:text-4xl">
           {clockForMinutes(minutes)}
         </p>
         <p className="mt-0.5 text-base font-semibold text-foreground-strong">
@@ -133,7 +106,7 @@ export function TimeSelector({ minutes, onMinutesChange, intervalType, onInterva
         </p>
       </div>
 
-      <div className="w-full max-w-md px-3">
+      <div className="w-full max-w-md min-w-0 px-3">
         <div
           ref={sliderRef}
           role="slider"
@@ -165,7 +138,7 @@ export function TimeSelector({ minutes, onMinutesChange, intervalType, onInterva
             ))}
           </div>
           <motion.div
-            className="absolute top-1/2 flex size-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground shadow-[0_3px_0_rgba(46,26,8,0.35)] sm:size-12"
+            className="absolute top-1/2 flex size-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-primary text-base font-bold text-primary-foreground shadow-[0_3px_0_rgba(46,26,8,0.35)]"
             initial={false}
             animate={{ left: `${position * 100}%` }}
             transition={{ type: "spring", stiffness: 400, damping: 36 }}
@@ -174,13 +147,13 @@ export function TimeSelector({ minutes, onMinutesChange, intervalType, onInterva
             {Math.floor(minutes) > 0 ? Math.floor(minutes) : ""}
           </motion.div>
         </div>
-        <div aria-hidden="true" className="relative h-4">
+        <div aria-hidden="true" className="relative h-5">
           {ticks
             .filter((value) => value === firstTick || LABELLED_TICKS.has(value))
             .map((value) => (
               <p
                 key={value}
-                className="absolute -translate-x-1/2 text-xs font-bold whitespace-nowrap text-foreground-strong"
+                className="absolute -translate-x-1/2 text-sm font-bold whitespace-nowrap text-foreground-strong"
                 style={{ left: `${tickLeft(value, minMinutes)}%` }}
               >
                 {tickLabel(value)}
@@ -189,7 +162,8 @@ export function TimeSelector({ minutes, onMinutesChange, intervalType, onInterva
         </div>
       </div>
 
-      <div className="flex flex-wrap justify-center gap-2">
+      {/* Six chips need 318px for one row; in anything narrower they wrap as two balanced rows of three. */}
+      <div className="@container flex w-full flex-wrap justify-center gap-1.5 sm:gap-2">
         {PRESETS.map((preset) => {
           const selected = minutes === preset
           return (
@@ -199,7 +173,7 @@ export function TimeSelector({ minutes, onMinutesChange, intervalType, onInterva
               aria-pressed={selected}
               whileTap={{ scale: 0.95 }}
               onClick={() => change(preset)}
-              className={`min-h-11 min-w-12 rounded-full px-3 py-2 text-sm font-bold focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-foreground-strong ${
+              className={`min-h-12 min-w-12 rounded-full px-1.5 py-2 text-base font-bold focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-foreground-strong @max-[19.8rem]:basis-[calc(33.333%-4px)] sm:min-h-11 sm:px-2 md:min-w-14 md:px-3 ${
                 selected ? "bg-primary text-primary-foreground" : "bg-card text-card-foreground"
               }`}
             >
