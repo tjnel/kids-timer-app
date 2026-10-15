@@ -22,6 +22,7 @@ export function KidsTimer() {
   const [intervalType, setIntervalType] = useState<"30sec" | "1min">("30sec")
   const [showCelebration, setShowCelebration] = useState(false)
   const [justCompletedInterval, setJustCompletedInterval] = useState(false)
+  const [lastPieceComplete, setLastPieceComplete] = useState(false)
   const [timeUpBurst, setTimeUpBurst] = useState(0)
   const themeRef = useRef(theme)
   themeRef.current = theme
@@ -50,9 +51,15 @@ export function KidsTimer() {
   }, [])
 
   const handleIntervalComplete = useCallback(
-    (_completed: number) => {
+    (completed: number) => {
+      const intervalSeconds = intervalType === "1min" ? 60 : 30
+      const total = Math.max(1, Math.ceil((selectedMinutes * 60) / intervalSeconds))
+      setLastPieceComplete(completed >= total)
       setJustCompletedInterval(true)
-      window.setTimeout(() => setJustCompletedInterval(false), 800)
+      window.setTimeout(() => {
+        setJustCompletedInterval(false)
+        setLastPieceComplete(false)
+      }, 800)
 
       if ("vibrate" in navigator) {
         navigator.vibrate([50, 30, 50])
@@ -64,7 +71,7 @@ export function KidsTimer() {
         /* audio optional */
       }
     },
-    [playChomp],
+    [playChomp, intervalType, selectedMinutes],
   )
 
   const handleTimerComplete = useCallback(() => {
@@ -179,8 +186,8 @@ export function KidsTimer() {
     100
 
   return (
-    <div className="theme-mint isolate flex min-h-dvh flex-col overflow-x-hidden bg-background">
-      <header className="flex items-center justify-between p-3 sm:p-4">
+    <div className="theme-mint isolate flex h-dvh flex-col overflow-hidden bg-background">
+      <header className="flex shrink-0 items-center justify-between px-3 py-2 sm:p-4">
         <motion.div
           initial={{ x: -16, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
@@ -210,7 +217,7 @@ export function KidsTimer() {
         </button>
       </header>
 
-      <main className="flex flex-1 flex-col items-center justify-center overflow-y-auto overflow-x-hidden p-3 sm:p-4">
+      <main className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-2 sm:p-4">
         <AnimatePresence mode="wait">
           {view === "setup" ? (
             <motion.div
@@ -218,7 +225,7 @@ export function KidsTimer() {
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -16 }}
-              className="flex w-full max-w-lg flex-col items-center gap-5 sm:gap-6"
+              className="mx-auto flex min-h-full w-full max-w-lg flex-col items-center justify-start gap-3 sm:justify-center sm:gap-6"
             >
               <ThemeSelector theme={theme} onThemeChange={setTheme} />
 
@@ -231,7 +238,7 @@ export function KidsTimer() {
               />
 
               <div className="w-full rounded-[1.75rem] bg-card/70 p-2 ring-1 ring-black/5 sm:p-3">
-                <p className="mb-1 text-center text-sm text-muted-foreground">
+                <p className="mb-1 text-center text-base text-muted-foreground sm:text-sm">
                   {theme === "mouse" ? "The mouse eats cheese, then runs home." : "The car passes a cone each interval."}
                 </p>
                 <TimerGrid
@@ -243,25 +250,6 @@ export function KidsTimer() {
                   currentIntervalProgress={0}
                 />
               </div>
-
-              <motion.button
-                type="button"
-                aria-label="Start timer"
-                whileTap={{ scale: 0.96 }}
-                onClick={handleStart}
-                className="relative flex min-h-12 items-center gap-2 rounded-full bg-primary py-3 pr-6 pl-7 text-lg font-semibold text-primary-foreground shadow-lg ring-1 ring-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 sm:text-xl"
-              >
-                Start
-                {theme === "mouse" ? (
-                  <Cheese className="size-7 sm:size-8" />
-                ) : (
-                  <FinishFlag className="size-7 sm:size-8" />
-                )}
-                <span
-                  className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2"
-                  aria-hidden="true"
-                />
-              </motion.button>
             </motion.div>
           ) : (
             <motion.div
@@ -269,7 +257,7 @@ export function KidsTimer() {
               initial={{ opacity: 0, scale: 0.96 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.96 }}
-              className="flex w-full max-w-lg flex-col items-center gap-3 sm:gap-4"
+              className="mx-auto flex min-h-full w-full max-w-lg flex-col items-center justify-center gap-3 sm:gap-4"
             >
               <TimerGrid
                 totalIntervals={timer.totalIntervals}
@@ -296,7 +284,7 @@ export function KidsTimer() {
                     transition={{ duration: 0.08, ease: "linear" }}
                   />
                 </div>
-                <p className="mt-2 text-center text-sm text-muted-foreground">
+                <p className="mt-2 text-center text-base text-muted-foreground sm:text-sm">
                   {timer.completedIntervals} of {timer.totalIntervals} pieces
                 </p>
               </div>
@@ -313,13 +301,36 @@ export function KidsTimer() {
         </AnimatePresence>
       </main>
 
-      <footer className="p-3 text-center">
-        <p className="text-sm text-muted-foreground">
-          {theme === "mouse"
-            ? "Listen for the ticks. Watch the mouse nibble, then run home."
-            : "Listen for the ticks. Watch the car race."}
-        </p>
-      </footer>
+      {view === "setup" ? (
+        <div className="flex shrink-0 justify-center bg-background/90 px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <motion.button
+            type="button"
+            aria-label="Start timer"
+            whileTap={{ scale: 0.96 }}
+            onClick={handleStart}
+            className="relative flex min-h-12 items-center gap-2 rounded-full bg-primary py-3 pr-6 pl-7 text-lg font-semibold text-primary-foreground shadow-lg ring-1 ring-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 sm:text-xl"
+          >
+            Start
+            {theme === "mouse" ? (
+              <Cheese className="size-7 sm:size-8" />
+            ) : (
+              <FinishFlag className="size-7 sm:size-8" />
+            )}
+            <span
+              className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2"
+              aria-hidden="true"
+            />
+          </motion.button>
+        </div>
+      ) : (
+        <footer className="shrink-0 px-3 py-2 text-center sm:p-3">
+          <p className="text-base text-muted-foreground sm:text-sm">
+            {theme === "mouse"
+              ? "Listen for the ticks. Watch the mouse nibble, then run home."
+              : "Listen for the ticks. Watch the car race."}
+          </p>
+        </footer>
+      )}
 
       <AnimatePresence>
         {justCompletedInterval && (
@@ -342,7 +353,7 @@ export function KidsTimer() {
                     : "radial-gradient(circle at center, rgba(255,107,0,0.4) 0%, transparent 70%)",
               }}
             />
-            <ConfettiBurst pieceCount={72} />
+            {lastPieceComplete && <ConfettiBurst pieceCount={72} />}
           </motion.div>
         )}
       </AnimatePresence>

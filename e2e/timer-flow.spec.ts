@@ -54,15 +54,27 @@ test.describe("Kids mouse timer", () => {
     await expect.poll(() => failed.slice()).toEqual([])
   })
 
-  test("phone-width setup does not scroll horizontally", async ({ page }) => {
+  test("phone-width setup keeps Start on screen without horizontal scroll", async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 640 })
     await page.goto("/")
-    await expect(page.getByRole("button", { name: "Start timer" })).toBeVisible()
+    const start = page.getByRole("button", { name: "Start timer" })
+    await expect(start).toBeVisible()
 
     const overflowX = await page.evaluate(
       () => document.documentElement.scrollWidth - window.innerWidth,
     )
     expect(overflowX).toBeLessThanOrEqual(1)
+
+    const startInView = await start.evaluate((el) => {
+      const rect = el.getBoundingClientRect()
+      return (
+        rect.top >= 0 &&
+        rect.bottom <= window.innerHeight &&
+        rect.left >= 0 &&
+        rect.right <= window.innerWidth
+      )
+    })
+    expect(startInView).toBe(true)
   })
 
   test("start, pause, resume keeps remaining time from snapping back", async ({

@@ -123,7 +123,7 @@ export function TimerGrid({
   )
 
   return (
-    <div className="mx-auto w-full max-w-lg p-2 sm:p-3">
+    <div className="mx-auto w-full max-w-lg p-1 sm:p-3">
       <div className="relative">
       <div
         ref={gridRef}

@@ -75,7 +75,7 @@ export function TimeSelector({
   const intervalCount = Math.ceil((minutes * 60) / (intervalType === "1min" ? 60 : 30))
 
   return (
-    <div className="flex w-full flex-col items-center gap-5 px-2 sm:px-4">
+    <div className="flex w-full flex-col items-center gap-3 px-2 sm:gap-5 sm:px-4">
       <div className="flex gap-1 rounded-full bg-secondary p-1 ring-1 ring-black/5">
         <motion.button
           type="button"
@@ -111,11 +111,11 @@ export function TimeSelector({
         </motion.button>
       </div>
 
-      <div className="rounded-[1.75rem] bg-card px-8 py-4 shadow-sm ring-1 ring-black/5 sm:px-12 sm:py-5">
-        <p className="text-center text-5xl font-semibold tracking-tight text-foreground tabular-nums sm:text-6xl">
+      <div className="rounded-[1.75rem] bg-card px-8 py-2.5 shadow-sm ring-1 ring-black/5 sm:px-12 sm:py-5">
+        <p className="text-center text-4xl font-semibold tracking-tight text-foreground tabular-nums sm:text-6xl">
           {formatTime(minutes)}
         </p>
-        <p className="mt-1 text-center text-sm font-medium text-muted-foreground">
+        <p className="mt-1 text-center text-base font-medium text-muted-foreground sm:text-sm">
           {intervalCount} {intervalCount === 1 ? "piece" : "pieces"}
         </p>
       </div>
@@ -123,7 +123,7 @@ export function TimeSelector({
       <div className="w-full max-w-md px-2">
         <div
           ref={sliderRef}
-          className="relative h-14 cursor-pointer touch-none select-none sm:h-16"
+          className="relative h-12 cursor-pointer touch-none select-none sm:h-16"
           onPointerDown={handlePointerDown}
         >
           <div className="absolute top-1/2 right-0 left-0 h-3 -translate-y-1/2 rounded-full bg-muted" />
