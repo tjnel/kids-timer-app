@@ -1,194 +1,201 @@
 "use client"
 
-import { motion } from "framer-motion"
-import { useCallback, useRef } from "react"
+import { useCallback, useRef, useState } from "react"
+import { AnimatePresence, motion } from "framer-motion"
+import { formatClock, intervalSeconds, intervalsFor, MAX_MINUTES, snapMinutes, type IntervalType } from "@/hooks/use-timer"
+import { ConfettiBurst } from "./confetti-burst"
 
 interface TimeSelectorProps {
   minutes: number
-  seconds: number
   onMinutesChange: (minutes: number) => void
-  intervalType: "30sec" | "1min"
-  onIntervalTypeChange: (type: "30sec" | "1min") => void
+  intervalType: IntervalType
 }
 
-export function TimeSelector({
-  minutes,
-  onMinutesChange,
-  intervalType,
-  onIntervalTypeChange,
-}: TimeSelectorProps) {
+const PRESETS = [1, 2, 3, 5, 10, 15]
+const LABELLED_TICKS = new Set([5, 10, MAX_MINUTES])
+const BURST_THROTTLE_MS = 280
+
+function clockForMinutes(mins: number) {
+  return formatClock(mins * 60)
+}
+
+function tickLabel(mins: number) {
+  return mins < 1 ? `${Math.round(mins * 60)}s` : `${mins}m`
+}
+
+function tickLeft(value: number, minMinutes: number) {
+  return ((value - minMinutes) / (MAX_MINUTES - minMinutes)) * 100
+}
+
+export function TimeSelector({ minutes, onMinutesChange, intervalType }: TimeSelectorProps) {
   const sliderRef = useRef<HTMLDivElement>(null)
-  const maxMinutes = 15
-  const minMinutes = intervalType === "1min" ? 1 : 0.5
-  const step = intervalType === "1min" ? 1 : 0.5
-  const sliderPosition = (minutes - minMinutes) / (maxMinutes - minMinutes)
+  const [burst, setBurst] = useState(0)
+  const lastBurstAt = useRef(0)
+  const step = intervalSeconds(intervalType) / 60
+  const minMinutes = step
+  const position = Math.max(0, Math.min(1, (minutes - minMinutes) / (MAX_MINUTES - minMinutes)))
+  const pieces = intervalsFor(minutes, intervalType)
 
-  const formatTime = (mins: number) => {
-    const totalMins = Math.floor(mins)
-    const secs = Math.round((mins % 1) * 60)
-    return `${totalMins}:${String(secs).padStart(2, "0")}`
-  }
-
-  const getMinuteLabel = (mins: number) => {
-    if (mins < 1) return `${Math.round(mins * 60)}s`
-    return `${mins}m`
-  }
-
-  const handleSliderInteraction = useCallback(
-    (clientX: number) => {
-      if (!sliderRef.current) return
-      const rect = sliderRef.current.getBoundingClientRect()
-      const x = clientX - rect.left
-      const percentage = Math.max(0, Math.min(1, x / rect.width))
-      const rawMinutes = minMinutes + percentage * (maxMinutes - minMinutes)
-      const snappedMinutes = Math.round(rawMinutes / step) * step
-      const clampedMinutes = Math.max(minMinutes, Math.min(maxMinutes, snappedMinutes))
-      onMinutesChange(clampedMinutes)
+  // A little confetti when the time goes up, so adding minutes feels like a treat.
+  const change = useCallback(
+    (raw: number) => {
+      const next = snapMinutes(raw, intervalType)
+      if (next > minutes) {
+        const now = performance.now()
+        if (now - lastBurstAt.current > BURST_THROTTLE_MS) {
+          lastBurstAt.current = now
+          setBurst((key) => key + 1)
+        }
+      }
+      onMinutesChange(next)
     },
-    [minMinutes, maxMinutes, step, onMinutesChange],
+    [intervalType, minutes, onMinutesChange],
   )
 
-  const handlePointerDown = (e: React.PointerEvent) => {
-    e.preventDefault()
-    handleSliderInteraction(e.clientX)
+  const setFromClientX = useCallback(
+    (clientX: number) => {
+      const el = sliderRef.current
+      if (!el) return
+      const rect = el.getBoundingClientRect()
+      const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
+      change(minMinutes + ratio * (MAX_MINUTES - minMinutes))
+    },
+    [change, minMinutes],
+  )
 
-    const handlePointerMove = (event: PointerEvent) => {
-      handleSliderInteraction(event.clientX)
-    }
-
-    const handlePointerUp = () => {
-      document.removeEventListener("pointermove", handlePointerMove)
-      document.removeEventListener("pointerup", handlePointerUp)
-    }
-
-    document.addEventListener("pointermove", handlePointerMove)
-    document.addEventListener("pointerup", handlePointerUp)
+  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    event.currentTarget.focus()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    setFromClientX(event.clientX)
   }
 
-  const tickMarks: Array<{ value: number; isMain: boolean; showLabel: boolean }> = []
-  for (let i = minMinutes; i <= maxMinutes; i += step) {
-    const isMainTick = i % 1 === 0
-    const showLabel = i === minMinutes || i === 5 || i === 10 || i === maxMinutes
-    tickMarks.push({ value: i, isMain: isMainTick, showLabel })
+  const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.buttons === 0) return
+    setFromClientX(event.clientX)
   }
 
-  const intervalCount = Math.ceil((minutes * 60) / (intervalType === "1min" ? 60 : 30))
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const target =
+      event.key === "ArrowRight" || event.key === "ArrowUp"
+        ? minutes + step
+        : event.key === "ArrowLeft" || event.key === "ArrowDown"
+          ? minutes - step
+          : event.key === "Home"
+            ? minMinutes
+            : event.key === "End"
+              ? MAX_MINUTES
+              : null
+    if (target === null) return
+    event.preventDefault()
+    change(target)
+  }
+
+  const ticks: number[] = []
+  for (let value = Math.ceil(minMinutes); value <= MAX_MINUTES; value += 1) ticks.push(value)
+  const firstTick = ticks[0] ?? MAX_MINUTES
 
   return (
-    <div className="flex w-full flex-col items-center gap-5 px-2 sm:px-4">
-      <div className="flex gap-1 rounded-full bg-secondary p-1 ring-1 ring-black/5">
-        <motion.button
-          type="button"
-          whileTap={{ scale: 0.96 }}
-          onClick={() => {
-            onIntervalTypeChange("30sec")
-            const nearest = Math.max(0.5, Math.round(minutes * 2) / 2)
-            onMinutesChange(nearest)
-          }}
-          className={`relative min-h-11 min-w-20 rounded-full px-4 py-2 text-sm font-semibold ${
-            intervalType === "30sec"
-              ? "bg-primary text-primary-foreground shadow-sm"
-              : "text-muted-foreground"
-          }`}
-        >
-          30 sec
-        </motion.button>
-        <motion.button
-          type="button"
-          whileTap={{ scale: 0.96 }}
-          onClick={() => {
-            onIntervalTypeChange("1min")
-            const nearest = Math.max(1, Math.round(minutes))
-            onMinutesChange(nearest)
-          }}
-          className={`relative min-h-11 min-w-20 rounded-full px-4 py-2 text-sm font-semibold ${
-            intervalType === "1min"
-              ? "bg-primary text-primary-foreground shadow-sm"
-              : "text-muted-foreground"
-          }`}
-        >
-          1 min
-        </motion.button>
-      </div>
-
-      <div className="rounded-[1.75rem] bg-card px-8 py-4 shadow-sm ring-1 ring-black/5 sm:px-12 sm:py-5">
-        <p className="text-center text-5xl font-semibold tracking-tight text-foreground tabular-nums sm:text-6xl">
-          {formatTime(minutes)}
+    <div className="flex w-full min-w-0 flex-col items-center gap-3 sm:gap-4 short:gap-1">
+      <div className="text-center">
+        <p className="text-5xl font-extrabold tracking-tight text-foreground tabular-nums sm:text-6xl short:text-4xl">
+          {clockForMinutes(minutes)}
         </p>
-        <p className="mt-1 text-center text-sm font-medium text-muted-foreground">
-          {intervalCount} {intervalCount === 1 ? "piece" : "pieces"}
+        <p className="mt-0.5 text-base font-semibold text-foreground-strong">
+          {pieces} {pieces === 1 ? "piece" : "pieces"}
         </p>
       </div>
 
-      <div className="w-full max-w-md px-2">
+      <div className="w-full max-w-md min-w-0 px-3">
         <div
           ref={sliderRef}
-          className="relative h-14 cursor-pointer touch-none select-none sm:h-16"
+          role="slider"
+          tabIndex={0}
+          aria-label="Minutes"
+          aria-valuemin={minMinutes}
+          aria-valuemax={MAX_MINUTES}
+          aria-valuenow={minutes}
+          aria-valuetext={clockForMinutes(minutes)}
           onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onKeyDown={handleKeyDown}
+          className="relative h-12 cursor-pointer touch-none rounded-full select-none focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-foreground-strong sm:h-14"
         >
-          <div className="absolute top-1/2 right-0 left-0 h-3 -translate-y-1/2 rounded-full bg-muted" />
+          <div className="absolute top-1/2 right-0 left-0 h-3 -translate-y-1/2 rounded-full bg-track" />
           <motion.div
             className="absolute top-1/2 left-0 h-3 -translate-y-1/2 rounded-full bg-primary"
-            style={{ width: `${sliderPosition * 100}%` }}
-            layout
-            transition={{ type: "spring", stiffness: 300, damping: 30 }}
+            initial={false}
+            animate={{ width: `${position * 100}%` }}
+            transition={{ type: "spring", stiffness: 400, damping: 36 }}
           />
-          <div className="absolute top-1/2 right-0 left-0 -translate-y-1/2">
-            {tickMarks
-              .filter((t) => t.isMain)
-              .map(({ value, showLabel }) => {
-                const pos = ((value - minMinutes) / (maxMinutes - minMinutes)) * 100
-                return (
-                  <div
-                    key={value}
-                    className="absolute flex flex-col items-center"
-                    style={{ left: `${pos}%`, transform: "translateX(-50%)" }}
-                  >
-                    <div
-                      className={`h-3 w-0.5 rounded-full sm:h-4 ${
-                        value <= minutes ? "bg-primary-foreground/60" : "bg-muted-foreground/30"
-                      }`}
-                    />
-                    {showLabel && (
-                      <p className="mt-3 text-[0.625rem] font-semibold whitespace-nowrap text-muted-foreground sm:mt-4 sm:text-xs">
-                        {getMinuteLabel(value)}
-                      </p>
-                    )}
-                  </div>
-                )
-              })}
+          <div className="pointer-events-none absolute top-1/2 right-0 left-0 -translate-y-1/2">
+            {ticks.map((value) => (
+              <div
+                key={value}
+                className={`absolute h-3 w-0.5 -translate-x-1/2 rounded-full ${value <= minutes ? "bg-primary-foreground/60" : "bg-foreground/25"}`}
+                style={{ left: `${tickLeft(value, minMinutes)}%` }}
+              />
+            ))}
           </div>
           <motion.div
-            className="absolute top-1/2 size-11 -translate-x-1/2 -translate-y-1/2 cursor-grab rounded-full bg-primary shadow-lg ring-4 ring-card active:cursor-grabbing sm:size-12"
-            style={{ left: `${sliderPosition * 100}%` }}
-            layout
-            transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            whileTap={{ scale: 0.95 }}
+            className="absolute top-1/2 flex size-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-primary text-base font-bold text-primary-foreground shadow-[0_3px_0_rgba(46,26,8,0.35)]"
+            initial={false}
+            animate={{ left: `${position * 100}%` }}
+            transition={{ type: "spring", stiffness: 400, damping: 36 }}
+            aria-hidden="true"
           >
-            <span className="flex size-full items-center justify-center text-sm font-semibold text-primary-foreground">
-              {Math.floor(minutes) > 0 ? Math.floor(minutes) : ""}
-            </span>
+            {Math.floor(minutes) > 0 ? Math.floor(minutes) : ""}
           </motion.div>
+        </div>
+        <div aria-hidden="true" className="relative h-5">
+          {ticks
+            .filter((value) => value === firstTick || LABELLED_TICKS.has(value))
+            .map((value) => (
+              <p
+                key={value}
+                className="absolute -translate-x-1/2 text-sm font-bold whitespace-nowrap text-foreground-strong"
+                style={{ left: `${tickLeft(value, minMinutes)}%` }}
+              >
+                {tickLabel(value)}
+              </p>
+            ))}
         </div>
       </div>
 
-      <div className="flex flex-wrap justify-center gap-2 px-2">
-        {[1, 2, 3, 5, 10, 15].map((mins) => (
-          <motion.button
-            type="button"
-            key={mins}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => onMinutesChange(mins)}
-            className={`relative min-h-11 min-w-11 rounded-full px-3 py-2 text-sm font-semibold sm:px-4 ${
-              minutes === mins
-                ? "bg-primary text-primary-foreground shadow-md"
-                : "bg-card text-card-foreground ring-1 ring-black/5"
-            }`}
-          >
-            {mins}m
-          </motion.button>
-        ))}
+      {/* Six chips need 318px for one row; in anything narrower they wrap as two balanced rows of three. */}
+      <div className="@container flex w-full flex-wrap justify-center gap-1.5 sm:gap-2">
+        {PRESETS.map((preset) => {
+          const selected = minutes === preset
+          return (
+            <motion.button
+              type="button"
+              key={preset}
+              aria-pressed={selected}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => change(preset)}
+              className={`min-h-12 min-w-12 rounded-full px-1.5 py-2 text-base font-bold focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-foreground-strong @max-[19.8rem]:basis-[calc(33.333%-4px)] sm:min-h-11 sm:px-2 md:min-w-14 md:px-3 ${
+                selected ? "bg-primary text-primary-foreground" : "bg-card text-card-foreground"
+              }`}
+            >
+              {preset}m
+            </motion.button>
+          )
+        })}
       </div>
+
+      <AnimatePresence>
+        {burst > 0 && (
+          <motion.div
+            key={burst}
+            initial={{ opacity: 1 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="pointer-events-none fixed inset-0 z-30"
+          >
+            <ConfettiBurst pieceCount={48} />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

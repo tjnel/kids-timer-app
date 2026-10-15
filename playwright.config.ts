@@ -3,6 +3,13 @@ import { defineConfig, devices } from "@playwright/test"
 const PORT = Number(process.env.E2E_PORT ?? 3100)
 const baseURL = `http://127.0.0.1:${PORT}`
 
+// The gate runs against the production build, which is what ships.
+// Set E2E_DEV=1 to iterate against `next dev` instead.
+const useDevServer = !!process.env.E2E_DEV
+const command = useDevServer
+  ? `pnpm exec next dev --hostname 127.0.0.1 --port ${PORT}`
+  : `pnpm exec next build && pnpm exec next start --hostname 127.0.0.1 --port ${PORT}`
+
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,
@@ -17,15 +24,23 @@ export default defineConfig({
     trace: "on-first-retry",
   },
   webServer: {
-    command: `pnpm exec next dev --hostname 127.0.0.1 --port ${PORT}`,
+    command,
     url: baseURL,
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
+    reuseExistingServer: useDevServer && !process.env.CI,
+    timeout: 240_000,
   },
   projects: [
     {
-      name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
+      name: "desktop",
+      use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 720 } },
+    },
+    {
+      name: "phone",
+      use: { ...devices["Pixel 7"], viewport: { width: 390, height: 844 } },
+    },
+    {
+      name: "small-phone",
+      use: { ...devices["Pixel 7"], viewport: { width: 320, height: 640 } },
     },
   ],
 })

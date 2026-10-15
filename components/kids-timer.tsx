@@ -1,371 +1,202 @@
 "use client"
 
-import { useState, useCallback, useEffect, useRef } from "react"
+import { useEffect, useState, useSyncExternalStore } from "react"
 import { AnimatePresence, motion } from "framer-motion"
-import { Volume2, VolumeX } from "lucide-react"
-import { TimerGrid, CelebrationOverlay, type ThemeType } from "./timer-grid"
-import { ConfettiBurst } from "./confetti-burst"
-import { TimeSelector } from "./time-selector"
-import { ThemeSelector } from "./theme-selector"
-import { TimerControls } from "./timer-controls"
-import { TimerDisplayRing } from "./timer-displays"
-import { useTimer } from "@/hooks/use-timer"
+import { ArrowLeft, Volume2, VolumeX } from "lucide-react"
 import { useKidsAudio } from "@/hooks/use-kids-audio"
-import { Mouse, Cheese, RaceCar, FinishFlag } from "./timer-icons"
+import { formatClock, intervalsFor, type IntervalType, snapMinutes, useTimer } from "@/hooks/use-timer"
+import { useTimerFeedback } from "@/hooks/use-timer-feedback"
+import { useWakeLock } from "@/hooks/use-wake-lock"
+import { CelebrationOverlay } from "./celebration-overlay"
+import { FlashOverlay } from "./flash-overlay"
+import { IconButton } from "./icon-button"
+import { IntervalToggle } from "./interval-toggle"
+import { PauseButton } from "./pause-button"
+import { THEMES, type ThemeType } from "./theme"
+import { ThemeSelector } from "./theme-selector"
+import { TimeSelector } from "./time-selector"
+import { TimerGrid } from "./timer-grid"
+import { Cheese, FinishFlag, Mouse, RaceCar } from "./timer-icons"
 
-type ViewState = "setup" | "running"
+const DEFAULT_MINUTES = 2
+const CELEBRATION_DELAY_MS = 800
+const FLASH_SECONDS = 0.8
+const VIEW_FADE = { duration: 0.18 }
+
+// `?minutes=` lets a parent bookmark a length. Unlike the slider it accepts
+// tenths (down to six seconds) so a whole run can be exercised quickly.
+function subscribeToNothing() {
+  return () => {}
+}
+function readUrlMinutes(): number | null {
+  const raw = new URLSearchParams(window.location.search).get("minutes")
+  if (!raw) return null
+  const mins = Number(raw)
+  if (!Number.isFinite(mins)) return null
+  return Math.max(0.1, Math.min(15, Math.round(mins * 10) / 10))
+}
+function serverUrlMinutes() {
+  return null
+}
+
+/** True from `delayMs` after `active` turns on until it turns off. */
+function useDelayed(active: boolean, delayMs: number) {
+  const [ready, setReady] = useState(false)
+  useEffect(() => {
+    if (!active) return
+    const id = window.setTimeout(() => setReady(true), delayMs)
+    return () => {
+      window.clearTimeout(id)
+      setReady(false)
+    }
+  }, [active, delayMs])
+  return active && ready
+}
 
 export function KidsTimer() {
-  const [view, setView] = useState<ViewState>("setup")
   const [theme, setTheme] = useState<ThemeType>("mouse")
-  const [selectedMinutes, setSelectedMinutes] = useState(2)
-  const [intervalType, setIntervalType] = useState<"30sec" | "1min">("30sec")
-  const [showCelebration, setShowCelebration] = useState(false)
-  const [justCompletedInterval, setJustCompletedInterval] = useState(false)
-  const [timeUpBurst, setTimeUpBurst] = useState(0)
-  const themeRef = useRef(theme)
-  themeRef.current = theme
-  const { getContext, playChomp, playFanfare, playTick, muted, toggleMuted } = useKidsAudio()
-  const celebrationTimerRef = useRef<number | null>(null)
-  const lastTickSecondRef = useRef<number | null>(null)
-  const lastTimeUpBurstAt = useRef(0)
+  const urlMinutes = useSyncExternalStore(subscribeToNothing, readUrlMinutes, serverUrlMinutes)
+  const [chosenMinutes, setChosenMinutes] = useState<number | null>(null)
+  const selectedMinutes = chosenMinutes ?? urlMinutes ?? DEFAULT_MINUTES
+  const [intervalType, setIntervalType] = useState<IntervalType>("30sec")
 
-  useEffect(() => {
-    return () => {
-      if (celebrationTimerRef.current !== null) {
-        window.clearTimeout(celebrationTimerRef.current)
-      }
-    }
-  }, [])
+  const audio = useKidsAudio()
+  const timer = useTimer({ initialMinutes: selectedMinutes, intervalType })
+  const setup = timer.status === "idle"
+  const celebrating = useDelayed(timer.isDone, CELEBRATION_DELAY_MS)
+  const flashing = timer.isRunning && timer.completedIntervals > 0 && timer.intervalElapsedSeconds < FLASH_SECONDS
 
-  useEffect(() => {
-    const raw = new URLSearchParams(window.location.search).get("minutes")
-    if (!raw) return
-    const mins = Number(raw)
-    if (!Number.isFinite(mins)) return
-    const stepped = Math.round(mins * 2) / 2
-    const clamped = Math.max(0.5, Math.min(15, stepped))
-    setSelectedMinutes(clamped)
-    if (clamped < 1) setIntervalType("30sec")
-  }, [])
-
-  const handleIntervalComplete = useCallback(
-    (_completed: number) => {
-      setJustCompletedInterval(true)
-      window.setTimeout(() => setJustCompletedInterval(false), 800)
-
-      if ("vibrate" in navigator) {
-        navigator.vibrate([50, 30, 50])
-      }
-
-      try {
-        playChomp(themeRef.current)
-      } catch {
-        /* audio optional */
-      }
-    },
-    [playChomp],
-  )
-
-  const handleTimerComplete = useCallback(() => {
-    if (celebrationTimerRef.current !== null) {
-      window.clearTimeout(celebrationTimerRef.current)
-    }
-    celebrationTimerRef.current = window.setTimeout(() => {
-      setShowCelebration(true)
-      if ("vibrate" in navigator) {
-        navigator.vibrate([100, 50, 100, 50, 200, 100, 300])
-      }
-      try {
-        playFanfare()
-      } catch {
-        /* audio optional */
-      }
-    }, 800)
-  }, [playFanfare])
-
-  const timer = useTimer({
-    initialMinutes: selectedMinutes,
-    intervalType,
-    onIntervalComplete: handleIntervalComplete,
-    onTimerComplete: handleTimerComplete,
-  })
-
-  useEffect(() => {
-    if (!timer.isRunning) return
-    const remaining = timer.totalSeconds
-    if (remaining <= 0) return
-    if (lastTickSecondRef.current === remaining) return
-    lastTickSecondRef.current = remaining
-
-    const intervalSeconds = intervalType === "1min" ? 60 : 30
-    if (remaining % intervalSeconds === 0) return
-
-    try {
-      playTick(themeRef.current, remaining)
-    } catch {
-      /* audio optional */
-    }
-  }, [timer.isRunning, timer.totalSeconds, intervalType, playTick])
+  useWakeLock(timer.isRunning)
+  useTimerFeedback({ timer, theme, intervalType, audio, celebrating })
 
   const handleStart = () => {
-    getContext()
-    lastTickSecondRef.current = null
-    timer.setTime(selectedMinutes)
-    setView("running")
+    audio.getContext()
     timer.start()
   }
 
-  const handleBack = () => {
-    if (celebrationTimerRef.current !== null) {
-      window.clearTimeout(celebrationTimerRef.current)
-      celebrationTimerRef.current = null
-    }
-    timer.reset()
-    setView("setup")
-    setShowCelebration(false)
+  const handleIntervalChange = (type: IntervalType) => {
+    setIntervalType(type)
+    setChosenMinutes(snapMinutes(selectedMinutes, type))
   }
 
-  const handleCelebrationClose = () => {
-    if (celebrationTimerRef.current !== null) {
-      window.clearTimeout(celebrationTimerRef.current)
-      celebrationTimerRef.current = null
-    }
-    setShowCelebration(false)
-    timer.reset()
-    timer.setTime(selectedMinutes)
-    setView("setup")
-  }
-
-  const handleMinutesChange = (mins: number) => {
-    if (mins > selectedMinutes) {
-      const now = performance.now()
-      if (now - lastTimeUpBurstAt.current > 280) {
-        lastTimeUpBurstAt.current = now
-        setTimeUpBurst((key) => key + 1)
-      }
-    }
-    setSelectedMinutes(mins)
-    timer.setTime(mins)
-  }
-
-  useEffect(() => {
-    let sentinel: WakeLockSentinel | null = null
-
-    const request = async () => {
-      if (!timer.isRunning || !("wakeLock" in navigator)) return
-      try {
-        sentinel = await navigator.wakeLock.request("screen")
-      } catch {
-        /* ignore */
-      }
-    }
-
-    void request()
-    const onVis = () => {
-      if (document.visibilityState === "visible") void request()
-    }
-    document.addEventListener("visibilitychange", onVis)
-    return () => {
-      document.removeEventListener("visibilitychange", onVis)
-      void sentinel?.release()
-    }
-  }, [timer.isRunning])
-
-  const initialTotalSeconds = selectedMinutes * 60
-  const progressPct =
-    ((timer.completedIntervals + (timer.isRunning || timer.visualRemaining < initialTotalSeconds ? timer.currentIntervalProgress : 0)) /
-      Math.max(1, timer.totalIntervals)) *
-    100
+  const spec = THEMES[theme]
+  const muteButton = (
+    <IconButton label={audio.muted ? "Unmute sounds" : "Mute sounds"} pressed={audio.muted} onClick={audio.toggleMuted}>
+      {audio.muted ? <VolumeX className="size-6" /> : <Volume2 className="size-6" />}
+    </IconButton>
+  )
 
   return (
-    <div className="theme-mint isolate flex min-h-dvh flex-col overflow-x-hidden bg-background">
-      <header className="flex items-center justify-between p-3 sm:p-4">
-        <motion.div
-          initial={{ x: -16, opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          className="flex items-center gap-2"
-        >
-          {theme === "mouse" ? (
-            <Mouse className="size-8 sm:size-9" isMoving={false} isEating={false} playing={false} />
-          ) : (
-            <RaceCar className="h-6 w-10 sm:h-7 sm:w-12" isMoving={false} playing={false} />
-          )}
-          <h1 className="text-lg font-semibold tracking-tight text-foreground sm:text-xl">
-            {theme === "mouse" ? "Mouse Timer" : "Race Timer"}
-          </h1>
-        </motion.div>
-        <button
-          type="button"
-          aria-label={muted ? "Unmute sounds" : "Mute sounds"}
-          aria-pressed={muted}
-          onClick={toggleMuted}
-          className="relative flex size-12 shrink-0 items-center justify-center rounded-full bg-secondary text-secondary-foreground shadow-md ring-1 ring-black/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
-        >
-          {muted ? <VolumeX className="size-5" /> : <Volume2 className="size-5" />}
-          <span
-            className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2"
-            aria-hidden="true"
-          />
-        </button>
-      </header>
-
-      <main className="flex flex-1 flex-col items-center justify-center overflow-y-auto overflow-x-hidden p-3 sm:p-4">
-        <AnimatePresence mode="wait">
-          {view === "setup" ? (
-            <motion.div
-              key="setup"
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -16 }}
-              className="flex w-full max-w-lg flex-col items-center gap-5 sm:gap-6"
-            >
-              <ThemeSelector theme={theme} onThemeChange={setTheme} />
-
-              <TimeSelector
-                minutes={selectedMinutes}
-                seconds={0}
-                onMinutesChange={handleMinutesChange}
-                intervalType={intervalType}
-                onIntervalTypeChange={setIntervalType}
-              />
-
-              <div className="w-full rounded-[1.75rem] bg-card/70 p-2 ring-1 ring-black/5 sm:p-3">
-                <p className="mb-1 text-center text-sm text-muted-foreground">
-                  {theme === "mouse" ? "The mouse eats cheese, then runs home." : "The car passes a cone each interval."}
-                </p>
-                <TimerGrid
-                  totalIntervals={Math.ceil((selectedMinutes * 60) / (intervalType === "1min" ? 60 : 30))}
-                  completedIntervals={0}
-                  theme={theme}
-                  isRunning={false}
-                  intervalType={intervalType}
-                  currentIntervalProgress={0}
-                />
+    <div className="flex h-dvh flex-col overflow-hidden bg-background pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)] text-foreground">
+      <AnimatePresence mode="wait" initial={false}>
+        {setup ? (
+          <motion.div
+            key="setup"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={VIEW_FADE}
+            className="flex min-h-0 flex-1 flex-col"
+          >
+            <header className="flex shrink-0 items-center justify-between px-4 py-2 sm:py-3 short:py-1.5">
+              <div className="flex min-w-0 items-center gap-2">
+                {theme === "mouse" ? <Mouse className="size-9 shrink-0" /> : <RaceCar className="h-7 w-11 shrink-0" />}
+                <h1 className="truncate text-xl font-extrabold tracking-tight">{spec.title}</h1>
               </div>
+              {muteButton}
+            </header>
 
+            {/*
+              One column on phones and tablets. Landscape phones have no height to
+              spare, so the time controls move into a second column and the
+              preview is dropped.
+            */}
+            <main className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-4">
+              <div className="mx-auto my-auto grid w-full max-w-lg grid-cols-1 justify-items-center gap-3 py-1 sm:gap-5 md:max-w-xl short:max-w-4xl short:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] short:items-center short:gap-x-8 short:gap-y-3">
+                <div className="w-full min-w-0 short:col-start-1 short:row-start-1">
+                  <ThemeSelector theme={theme} onThemeChange={setTheme} />
+                </div>
+                <div className="short:col-start-1 short:row-start-2">
+                  <IntervalToggle value={intervalType} onChange={handleIntervalChange} />
+                </div>
+                <div className="w-full min-w-0 short:col-start-2 short:row-span-3 short:row-start-1">
+                  <TimeSelector minutes={selectedMinutes} onMinutesChange={setChosenMinutes} intervalType={intervalType} />
+                </div>
+                <div className="w-full min-w-0 short:col-start-1 short:row-start-3">
+                  <p className="mb-2 text-center text-base font-semibold text-foreground-strong short:mb-0">{spec.hint}</p>
+                  <div className="h-16 w-full sm:h-24 md:h-28 short:hidden">
+                    <TimerGrid
+                      totalIntervals={intervalsFor(selectedMinutes, intervalType)}
+                      completedIntervals={0}
+                      theme={theme}
+                      isRunning={false}
+                      currentIntervalProgress={0}
+                      maxCell={72}
+                    />
+                  </div>
+                </div>
+              </div>
+            </main>
+
+            <div className="flex shrink-0 justify-center px-4 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] short:pt-1 short:pb-[max(0.5rem,env(safe-area-inset-bottom))]">
               <motion.button
                 type="button"
                 aria-label="Start timer"
                 whileTap={{ scale: 0.96 }}
                 onClick={handleStart}
-                className="relative flex min-h-12 items-center gap-2 rounded-full bg-primary py-3 pr-6 pl-7 text-lg font-semibold text-primary-foreground shadow-lg ring-1 ring-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 sm:text-xl"
+                className="flex min-h-14 items-center gap-2 rounded-full bg-primary py-3 pr-6 pl-8 text-xl font-extrabold text-primary-foreground shadow-[0_5px_0_rgba(46,26,8,0.3)] focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-foreground-strong md:min-h-16 md:text-2xl short:min-h-12 short:py-2"
               >
                 Start
-                {theme === "mouse" ? (
-                  <Cheese className="size-7 sm:size-8" />
-                ) : (
-                  <FinishFlag className="size-7 sm:size-8" />
-                )}
-                <span
-                  className="pointer-fine:hidden absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2"
-                  aria-hidden="true"
-                />
+                {theme === "mouse" ? <Cheese className="size-8 shrink-0" /> : <FinishFlag className="size-8 shrink-0" />}
               </motion.button>
-            </motion.div>
-          ) : (
-            <motion.div
-              key="running"
-              initial={{ opacity: 0, scale: 0.96 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.96 }}
-              className="flex w-full max-w-lg flex-col items-center gap-3 sm:gap-4"
-            >
-              <TimerGrid
-                totalIntervals={timer.totalIntervals}
-                completedIntervals={timer.completedIntervals}
-                theme={theme}
-                isRunning={timer.isRunning}
-                intervalType={intervalType}
-                currentIntervalProgress={timer.currentIntervalProgress}
-              />
-
-              <TimerDisplayRing
-                minutes={timer.minutes}
-                seconds={timer.seconds}
-                totalSeconds={timer.visualRemaining}
-                initialTotal={initialTotalSeconds}
-              />
-
-              <div className="w-full max-w-md px-3">
-                <div className="h-2 overflow-hidden rounded-full bg-muted sm:h-2.5">
-                  <motion.div
-                    className="h-full rounded-full bg-accent"
-                    initial={false}
-                    animate={{ width: `${Math.min(100, Math.max(0, progressPct))}%` }}
-                    transition={{ duration: 0.08, ease: "linear" }}
-                  />
-                </div>
-                <p className="mt-2 text-center text-sm text-muted-foreground">
-                  {timer.completedIntervals} of {timer.totalIntervals} pieces
-                </p>
-              </div>
-
-              <TimerControls
-                isRunning={timer.isRunning}
-                onPlayPause={timer.toggle}
-                onReset={timer.reset}
-                onBack={handleBack}
-                showBack={true}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </main>
-
-      <footer className="p-3 text-center">
-        <p className="text-sm text-muted-foreground">
-          {theme === "mouse"
-            ? "Listen for the ticks. Watch the mouse nibble, then run home."
-            : "Listen for the ticks. Watch the car race."}
-        </p>
-      </footer>
-
-      <AnimatePresence>
-        {justCompletedInterval && (
+            </div>
+          </motion.div>
+        ) : (
           <motion.div
+            key="running"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.45, type: "tween" }}
-            className="pointer-events-none fixed inset-0 z-40"
+            transition={VIEW_FADE}
+            className="flex min-h-0 flex-1 flex-col"
           >
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: [0, 0.22, 0] }}
-              transition={{ duration: 0.45, type: "tween" }}
-              className="absolute inset-0"
-              style={{
-                background:
-                  theme === "mouse"
-                    ? "radial-gradient(circle at center, rgba(255,217,61,0.45) 0%, transparent 70%)"
-                    : "radial-gradient(circle at center, rgba(255,107,0,0.4) 0%, transparent 70%)",
-              }}
-            />
-            <ConfettiBurst pieceCount={72} />
+            <h1 className="sr-only">{spec.title}</h1>
+            <header className="flex shrink-0 items-center justify-between px-3 py-2 sm:px-5 sm:py-3 short:py-1">
+              <div className="flex items-center gap-1">
+                <IconButton label="Back to setup" onClick={timer.reset}>
+                  <ArrowLeft className="size-7" strokeWidth={2.75} />
+                </IconButton>
+                {muteButton}
+              </div>
+              <p className="pr-2 text-3xl font-extrabold tracking-tight tabular-nums sm:text-4xl md:text-5xl short:text-3xl">
+                <span className="sr-only">Time left </span>
+                <span data-testid="remaining-time">{formatClock(timer.remainingSeconds)}</span>
+              </p>
+            </header>
+
+            {/* The pause control sits under the grid, or beside it when the screen is short. */}
+            <div className="flex min-h-0 flex-1 flex-col short:flex-row">
+              <main className="min-h-0 flex-1 px-3 py-1 sm:px-8 short:px-4 short:py-2">
+                <TimerGrid
+                  totalIntervals={timer.totalIntervals}
+                  completedIntervals={timer.completedIntervals}
+                  theme={theme}
+                  isRunning={timer.isRunning}
+                  currentIntervalProgress={timer.currentIntervalProgress}
+                />
+              </main>
+
+              <footer className="flex shrink-0 justify-center pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] short:items-center short:px-6 short:pt-0 short:pb-0">
+                <PauseButton isRunning={timer.isRunning} onPause={timer.pause} onPlay={timer.start} />
+              </footer>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {timeUpBurst > 0 && view === "setup" && (
-          <motion.div
-            key={timeUpBurst}
-            initial={{ opacity: 1 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="pointer-events-none fixed inset-0 z-30"
-          >
-            <ConfettiBurst pieceCount={64} />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <FlashOverlay active={flashing} flashKey={timer.completedIntervals} gradient={spec.flash} />
 
-      <AnimatePresence>
-        {showCelebration && (
-          <CelebrationOverlay theme={theme} onClose={handleCelebrationClose} />
-        )}
-      </AnimatePresence>
+      <AnimatePresence>{celebrating && <CelebrationOverlay theme={theme} onClose={timer.reset} />}</AnimatePresence>
     </div>
   )
 }

@@ -4,16 +4,15 @@ import { Analytics } from '@vercel/analytics/next'
 import { ServiceWorkerRegister } from '@/components/service-worker-register'
 import './globals.css'
 
-const nunito = Nunito({ 
-  subsets: ["latin"],
+const nunito = Nunito({
+  subsets: ['latin'],
   variable: '--font-nunito',
-  weight: ['400', '600', '700', '800']
-});
+  weight: ['400', '600', '700', '800'],
+})
 
 export const metadata: Metadata = {
   title: 'Kids Timer',
   description: 'A fun visual timer for kids with mouse and race car themes',
-  generator: 'v0.app',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
@@ -31,11 +30,10 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  themeColor: '#f2f8f4',
+  themeColor: '#a08260',
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  viewportFit: 'cover',
 }
 
 export default function RootLayout({
@@ -44,11 +42,11 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className="theme-mint bg-[#f2f8f4]">
-      <body className={`${nunito.variable} font-sans antialiased bg-[#f2f8f4]`}>
+    <html lang="en">
+      <body className={`${nunito.variable} font-sans`}>
         {children}
         <ServiceWorkerRegister />
-        {process.env.NODE_ENV === 'production' && <Analytics />}
+        {process.env.NEXT_PUBLIC_VERCEL_ENV && <Analytics />}
       </body>
     </html>
   )

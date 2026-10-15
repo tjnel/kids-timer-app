@@ -1,240 +1,60 @@
 @import 'tailwindcss';
-@import 'tw-animate-css';
 
-@custom-variant dark (&:is(.dark *));
+/* Landscape phones: too little height for the stacked layouts, so they go side by side. */
+@custom-variant short (@media (max-height: 30rem));
 
+/*
+ * Warm "mouse world" palette, sampled from the reference app:
+ * one tan screen, dark brown text and controls, apple red accents,
+ * cheese yellow food and cream cards for the setup screen.
+ */
 :root {
-  /* Mint/cream kids world — source of truth (layout imports this file) */
-  --background: oklch(0.98 0.02 170);
-  --foreground: oklch(0.28 0.04 260);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.28 0.04 260);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.28 0.04 260);
-  --primary: oklch(0.72 0.17 25);
-  --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.95 0.04 170);
-  --secondary-foreground: oklch(0.3 0.05 260);
-  --muted: oklch(0.93 0.03 170);
-  --muted-foreground: oklch(0.5 0.03 260);
-  --accent: oklch(0.78 0.14 200);
-  --accent-foreground: oklch(0.25 0.04 260);
-  --destructive: oklch(0.55 0.22 25);
-  --destructive-foreground: oklch(0.98 0 0);
-  --border: oklch(0.9 0.02 170);
-  --input: oklch(0.96 0.02 170);
-  --ring: oklch(0.72 0.17 25);
-  --chart-1: oklch(0.72 0.17 25);
-  --chart-2: oklch(0.85 0.18 95);
-  --chart-3: oklch(0.78 0.14 200);
-  --chart-4: oklch(0.65 0.2 250);
-  --chart-5: oklch(0.7 0.18 55);
-  --radius: 1.25rem;
-  --sidebar: oklch(1 0 0);
-  --sidebar-foreground: oklch(0.28 0.04 260);
-  --sidebar-primary: oklch(0.72 0.17 25);
-  --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent: oklch(0.95 0.04 170);
-  --sidebar-accent-foreground: oklch(0.28 0.04 260);
-  --sidebar-border: oklch(0.9 0.02 170);
-  --sidebar-ring: oklch(0.72 0.17 25);
-}
-
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.145 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.145 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.985 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.396 0.141 25.723);
-  --destructive-foreground: oklch(0.637 0.237 25.331);
-  --border: oklch(0.269 0 0);
-  --input: oklch(0.269 0 0);
-  --ring: oklch(0.439 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(0.269 0 0);
-  --sidebar-ring: oklch(0.439 0 0);
+  --background: #a08260;
+  --foreground: #412812;
+  --foreground-strong: #2e1a08;
+  --card: #f6ead6;
+  --card-foreground: #412812;
+  --primary: #d6171f;
+  --primary-foreground: #ffffff;
+  --control: #4a3320;
+  --control-foreground: #f6ead6;
+  --track: #8a6c4a;
+  --muted-foreground: #6b533a;
+  --accent: #f4b91c;
+  --border: rgba(65, 40, 18, 0.18);
+  --ring: #2e1a08;
 }
 
 @theme inline {
   --font-sans: var(--font-nunito), 'Nunito', system-ui, sans-serif;
-  --font-mono: 'Geist Mono', 'Geist Mono Fallback';
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-foreground-strong: var(--foreground-strong);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
+  --color-control: var(--control);
+  --color-control-foreground: var(--control-foreground);
+  --color-track: var(--track);
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
-  --color-input: var(--input);
   --color-ring: var(--ring);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
 }
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border outline-ring/60;
   }
   html {
-    @apply overflow-x-hidden bg-[#f2f8f4];
+    background-color: var(--background);
+    overflow-x: hidden;
   }
   body {
-    @apply bg-[#f2f8f4] text-foreground antialiased;
-    background-color: #f2f8f4;
-    background-image: linear-gradient(
-      to bottom right,
-      oklch(0.98 0.03 170) 0%,
-      oklch(0.97 0.03 35) 100%
-    );
+    @apply bg-background text-foreground antialiased;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
   }
-}
-
-/* Custom animations for Kids Timer */
-@keyframes bounce-soft {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-8px); }
-}
-
-@keyframes wiggle {
-  0%, 100% { transform: rotate(0deg); }
-  25% { transform: rotate(-5deg); }
-  75% { transform: rotate(5deg); }
-}
-
-@keyframes pulse-glow {
-  0%, 100% { 
-    box-shadow: 0 0 10px rgba(255, 217, 61, 0.4);
-    transform: scale(1);
-  }
-  50% { 
-    box-shadow: 0 0 25px rgba(255, 217, 61, 0.7);
-    transform: scale(1.05);
-  }
-}
-
-@keyframes chomp {
-  0% { transform: scale(1) rotate(0deg); }
-  25% { transform: scale(1.2) rotate(-10deg); }
-  50% { transform: scale(0.9) rotate(5deg); }
-  100% { transform: scale(1) rotate(0deg); }
-}
-
-@keyframes sparkle {
-  0%, 100% { opacity: 0; transform: scale(0) rotate(0deg); }
-  50% { opacity: 1; transform: scale(1) rotate(180deg); }
-}
-
-@keyframes float-up {
-  0% { 
-    opacity: 0;
-    transform: translateY(20px) scale(0.8);
-  }
-  50% {
-    opacity: 1;
-    transform: translateY(-10px) scale(1);
-  }
-  100% { 
-    opacity: 0;
-    transform: translateY(-40px) scale(0.6);
-  }
-}
-
-.animate-bounce-soft {
-  animation: bounce-soft 0.5s ease-in-out infinite;
-}
-
-.animate-wiggle {
-  animation: wiggle 0.3s ease-in-out infinite;
-}
-
-.animate-pulse-glow {
-  animation: pulse-glow 1s ease-in-out infinite;
-}
-
-.animate-chomp {
-  animation: chomp 0.3s ease-in-out;
-}
-
-.animate-sparkle {
-  animation: sparkle 1s ease-in-out infinite;
-}
-
-.animate-float-up {
-  animation: float-up 2s ease-out forwards;
-}
-
-/* =====================================================================
- * Pastel Mint theme
- * Applied on the root wrapper via class="theme-mint".
- * Overrides the CSS variables declared at :root so every Tailwind
- * color utility consuming them re-skins automatically.
- * ===================================================================== */
-.theme-mint {
-  --background: oklch(0.98 0.02 170);
-  --foreground: oklch(0.28 0.04 260);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.28 0.04 260);
-  --primary: oklch(0.72 0.17 25);
-  --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.95 0.04 170);
-  --secondary-foreground: oklch(0.3 0.05 260);
-  --muted: oklch(0.93 0.03 170);
-  --muted-foreground: oklch(0.5 0.03 260);
-  --accent: oklch(0.78 0.14 200);
-  --accent-foreground: oklch(0.25 0.04 260);
-  --border: oklch(0.9 0.02 170);
-  --ring: oklch(0.72 0.17 25);
-  --radius: 1.25rem;
-}
-.theme-mint {
-  background-image: linear-gradient(
-    to bottom right,
-    oklch(0.98 0.03 170) 0%,
-    oklch(0.97 0.03 35) 100%
-  );
 }

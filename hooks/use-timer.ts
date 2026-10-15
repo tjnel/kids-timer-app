@@ -1,195 +1,149 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
+
+export type IntervalType = "30sec" | "1min"
+export type TimerStatus = Phase["kind"]
 
 interface UseTimerOptions {
   initialMinutes: number
-  initialSeconds?: number
-  intervalType: "30sec" | "1min"
-  onIntervalComplete?: (completedIntervals: number) => void
-  onTimerComplete?: () => void
+  intervalType: IntervalType
 }
 
-function toTotal(minutes: number, seconds: number) {
-  return minutes * 60 + seconds
+type Phase =
+  | { kind: "idle" }
+  | { kind: "running"; remainingAtStart: number; startedAt: number }
+  | { kind: "paused"; remaining: number }
+  | { kind: "done" }
+
+const UI_TICK_MS = 50
+export const MAX_MINUTES = 15
+
+type RunningPhase = Extract<Phase, { kind: "running" }>
+
+/** Frame timestamps can trail performance.now(), so never exceed the start value. */
+function clampRemaining(phase: RunningPhase, now: number) {
+  const left = phase.remainingAtStart - (now - phase.startedAt) / 1000
+  return Math.max(0, Math.min(phase.remainingAtStart, left))
 }
 
-export function useTimer({
-  initialMinutes,
-  initialSeconds = 0,
-  intervalType,
-  onIntervalComplete,
-  onTimerComplete,
-}: UseTimerOptions) {
-  const intervalDuration = intervalType === "1min" ? 60 : 30
-  const configuredTotal = toTotal(initialMinutes, initialSeconds)
-  const totalIntervals = Math.max(1, Math.ceil(configuredTotal / intervalDuration))
+export function intervalSeconds(intervalType: IntervalType) {
+  return intervalType === "1min" ? 60 : 30
+}
 
-  const [displaySeconds, setDisplaySeconds] = useState(Math.ceil(configuredTotal))
-  const [visualRemaining, setVisualRemaining] = useState(configuredTotal)
-  const [isRunning, setIsRunning] = useState(false)
-  const [completedIntervals, setCompletedIntervals] = useState(0)
+export function intervalsFor(minutes: number, intervalType: IntervalType) {
+  return Math.max(1, Math.ceil((minutes * 60) / intervalSeconds(intervalType)))
+}
 
-  const visualRemainingRef = useRef(configuredTotal)
-  const remainingAtStartRef = useRef(configuredTotal)
-  const runStartedAtRef = useRef(0)
-  const lastIntervalCheck = useRef(0)
-  const lastDisplayedSecond = useRef(Math.ceil(configuredTotal))
-  const completedRef = useRef(false)
-  const isRunningRef = useRef(false)
-  const initialTotalRef = useRef(configuredTotal)
-  const onIntervalCompleteRef = useRef(onIntervalComplete)
-  const onTimerCompleteRef = useRef(onTimerComplete)
+/** The one policy for valid timer lengths: whole intervals, at least one, at most MAX_MINUTES. */
+export function snapMinutes(raw: number, intervalType: IntervalType) {
+  const step = intervalSeconds(intervalType) / 60
+  if (!Number.isFinite(raw)) return step
+  return Math.max(step, Math.min(MAX_MINUTES, Math.round(raw / step) * step))
+}
 
-  onIntervalCompleteRef.current = onIntervalComplete
-  onTimerCompleteRef.current = onTimerComplete
-  isRunningRef.current = isRunning
+/** "m:ss" for a number of seconds. */
+export function formatClock(totalSeconds: number) {
+  const whole = Math.max(0, Math.round(totalSeconds))
+  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`
+}
 
-  useEffect(() => {
-    initialTotalRef.current = toTotal(initialMinutes, initialSeconds)
-  }, [initialMinutes, initialSeconds])
+/**
+ * Elapsed-time timer. Everything the UI needs is derived from the current
+ * phase and the clock, so a backgrounded tab catches up correctly on return.
+ */
+export function useTimer({ initialMinutes, intervalType }: UseTimerOptions) {
+  const intervalDuration = intervalSeconds(intervalType)
+  const configuredTotal = initialMinutes * 60
+  const totalIntervals = intervalsFor(initialMinutes, intervalType)
 
-  const applyRemaining = useCallback((remaining: number) => {
-    visualRemainingRef.current = remaining
-    setVisualRemaining(remaining)
-    const display = Math.max(0, Math.ceil(remaining))
-    if (display !== lastDisplayedSecond.current) {
-      lastDisplayedSecond.current = display
-      setDisplaySeconds(display)
+  const [phase, setPhase] = useState<Phase>({ kind: "idle" })
+  const [now, setNow] = useState(0)
+
+  const remaining = (() => {
+    switch (phase.kind) {
+      case "idle":
+        return configuredTotal
+      case "running":
+        return clampRemaining(phase, now)
+      case "paused":
+        return phase.remaining
+      case "done":
+        return 0
+      default: {
+        const exhaustive: never = phase
+        return exhaustive
+      }
     }
-  }, [])
+  })()
 
-  const restoreConfigured = useCallback(() => {
-    const total = toTotal(initialMinutes, initialSeconds)
-    completedRef.current = false
-    lastIntervalCheck.current = 0
-    lastDisplayedSecond.current = Math.ceil(total)
-    visualRemainingRef.current = total
-    remainingAtStartRef.current = total
-    setVisualRemaining(total)
-    setDisplaySeconds(Math.ceil(total))
-    setCompletedIntervals(0)
-    setIsRunning(false)
-  }, [initialMinutes, initialSeconds])
-
-  const configKey = `${initialMinutes}:${initialSeconds}:${intervalType}`
-  const prevConfigKeyRef = useRef(configKey)
+  const elapsed = Math.max(0, configuredTotal - remaining)
+  const completedIntervals =
+    phase.kind === "done"
+      ? totalIntervals
+      : Math.min(totalIntervals, Math.floor(elapsed / intervalDuration))
+  const intervalElapsedSeconds = phase.kind === "done" ? intervalDuration : elapsed % intervalDuration
+  const currentIntervalProgress = Math.min(1, intervalElapsedSeconds / intervalDuration)
 
   useEffect(() => {
-    if (prevConfigKeyRef.current === configKey) return
-    prevConfigKeyRef.current = configKey
-    if (isRunningRef.current) return
-    restoreConfigured()
-  }, [configKey, restoreConfigured])
+    if (phase.kind !== "running") return
+    const running = phase
+    let raf = 0
+    let lastUi = 0
+    const tick = (timestamp: number) => {
+      if (clampRemaining(running, timestamp) <= 0) {
+        setNow(timestamp)
+        setPhase({ kind: "done" })
+        return
+      }
+      if (timestamp - lastUi >= UI_TICK_MS) {
+        lastUi = timestamp
+        setNow(timestamp)
+      }
+      raf = window.requestAnimationFrame(tick)
+    }
+    raf = window.requestAnimationFrame(tick)
+    return () => window.cancelAnimationFrame(raf)
+  }, [phase])
 
+  /** Starts from idle or resumes from paused; a no-op while running or done. */
   const start = useCallback(() => {
-    if (visualRemainingRef.current <= 0) {
-      restoreConfigured()
-    }
-    completedRef.current = false
-    remainingAtStartRef.current = visualRemainingRef.current
-    runStartedAtRef.current = performance.now()
-    setIsRunning(true)
-  }, [restoreConfigured])
+    const startedAt = performance.now()
+    setNow(startedAt)
+    setPhase((current) => {
+      if (current.kind === "running" || current.kind === "done") return current
+      return {
+        kind: "running",
+        remainingAtStart: current.kind === "paused" ? current.remaining : configuredTotal,
+        startedAt,
+      }
+    })
+  }, [configuredTotal])
 
   const pause = useCallback(() => {
-    setIsRunning(false)
-  }, [])
-
-  const toggle = useCallback(() => {
-    setIsRunning((prev) => {
-      if (prev) return false
-      if (visualRemainingRef.current <= 0) return false
-      remainingAtStartRef.current = visualRemainingRef.current
-      runStartedAtRef.current = performance.now()
-      completedRef.current = false
-      return true
+    setPhase((current) => {
+      if (current.kind !== "running") return current
+      return { kind: "paused", remaining: clampRemaining(current, performance.now()) }
     })
   }, [])
 
   const reset = useCallback(() => {
-    restoreConfigured()
-  }, [restoreConfigured])
-
-  const setTime = useCallback((newMinutes: number, newSeconds: number = 0) => {
-    const total = toTotal(newMinutes, newSeconds)
-    completedRef.current = false
-    lastIntervalCheck.current = 0
-    lastDisplayedSecond.current = Math.ceil(total)
-    visualRemainingRef.current = total
-    remainingAtStartRef.current = total
-    initialTotalRef.current = total
-    setIsRunning(false)
-    setVisualRemaining(total)
-    setDisplaySeconds(Math.ceil(total))
-    setCompletedIntervals(0)
+    setPhase({ kind: "idle" })
   }, [])
 
-  useEffect(() => {
-    if (!isRunning) return
-
-    remainingAtStartRef.current = visualRemainingRef.current
-    runStartedAtRef.current = performance.now()
-
-    let raf = 0
-    let lastUi = 0
-
-    const tick = (now: number) => {
-      const elapsed = (now - runStartedAtRef.current) / 1000
-      const remaining = Math.max(0, remainingAtStartRef.current - elapsed)
-      const initial = initialTotalRef.current
-      const elapsedTotal = Math.max(0, initial - remaining)
-      const done = Math.min(Math.floor(elapsedTotal / intervalDuration), Math.ceil(initial / intervalDuration))
-
-      if (done > lastIntervalCheck.current) {
-        lastIntervalCheck.current = done
-        setCompletedIntervals(done)
-        onIntervalCompleteRef.current?.(done)
-      }
-
-      if (now - lastUi >= 50 || remaining <= 0) {
-        lastUi = now
-        applyRemaining(remaining)
-      }
-
-      if (remaining <= 0) {
-        applyRemaining(0)
-        setCompletedIntervals(Math.ceil(initial / intervalDuration))
-        setIsRunning(false)
-        if (!completedRef.current) {
-          completedRef.current = true
-          onTimerCompleteRef.current?.()
-        }
-        return
-      }
-
-      raf = window.requestAnimationFrame(tick)
-    }
-
-    raf = window.requestAnimationFrame(tick)
-    return () => window.cancelAnimationFrame(raf)
-  }, [isRunning, intervalDuration, applyRemaining])
-
-  const minutes = Math.floor(displaySeconds / 60)
-  const seconds = displaySeconds % 60
-  const elapsedTotal = Math.max(0, initialTotalRef.current - visualRemaining)
-  const elapsedInCurrent = elapsedTotal % intervalDuration
-  const currentIntervalProgress =
-    visualRemaining <= 0 ? 1 : Math.min(1, elapsedInCurrent / intervalDuration)
-
   return {
-    minutes,
-    seconds,
-    totalSeconds: displaySeconds,
-    visualRemaining,
-    isRunning,
+    status: phase.kind,
+    remainingSeconds: Math.max(0, Math.ceil(remaining)),
+    isRunning: phase.kind === "running",
+    isDone: phase.kind === "done",
     completedIntervals,
     totalIntervals,
     currentIntervalProgress,
+    intervalElapsedSeconds,
     start,
     pause,
-    toggle,
     reset,
-    setTime,
   }
 }
+
+export type Timer = ReturnType<typeof useTimer>
