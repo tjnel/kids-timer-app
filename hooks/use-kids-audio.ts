@@ -5,15 +5,9 @@ import { THEMES, type ThemeType } from "@/components/theme"
 
 const MUTE_STORAGE_KEY = "kidstimer-muted"
 
-type WebkitAudioContextWindow = Window & {
-  webkitAudioContext?: typeof AudioContext
-}
-
 function createAudioContext(): AudioContext | null {
-  if (typeof window === "undefined") return null
-  const Ctor = window.AudioContext || (window as WebkitAudioContextWindow).webkitAudioContext
-  if (!Ctor) return null
-  return new Ctor()
+  if (typeof window === "undefined" || typeof window.AudioContext !== "function") return null
+  return new window.AudioContext()
 }
 
 /** One oscillator routed through its own gain to the output. */
