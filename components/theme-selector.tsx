@@ -1,7 +1,7 @@
 "use client"
 
 import { motion } from "framer-motion"
-import type { ThemeType } from "./timer-grid"
+import type { ThemeType } from "./theme"
 import { Cheese, FinishFlag, Mouse, RaceCar } from "./timer-icons"
 
 interface ThemeSelectorProps {

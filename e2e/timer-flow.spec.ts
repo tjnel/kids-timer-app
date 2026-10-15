@@ -9,17 +9,37 @@ async function readRemaining(page: Page) {
   return parseClock((await page.getByTestId("remaining-time").textContent()) ?? "0:00")
 }
 
-async function holdToPause(page: Page) {
+/**
+ * Presses the pause control for `ms`. Touch projects drive a real touch
+ * sequence through CDP so the long-press path (no trailing click) is exercised.
+ */
+async function pressPause(page: Page, ms: number, hasTouch: boolean) {
   const button = page.getByRole("button", { name: "Hold to pause" })
   await expect(button).toBeVisible()
   const box = await button.boundingBox()
   if (!box) {
     throw new Error("Pause button has no box")
   }
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
-  await page.mouse.down()
-  await page.waitForTimeout(900)
-  await page.mouse.up()
+  const x = box.x + box.width / 2
+  const y = box.y + box.height / 2
+  if (hasTouch) {
+    const cdp = await page.context().newCDPSession(page)
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y }] })
+    await page.waitForTimeout(ms)
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] })
+    await cdp.detach()
+  } else {
+    await page.mouse.move(x, y)
+    await page.mouse.down()
+    await page.waitForTimeout(ms)
+    await page.mouse.up()
+  }
+}
+
+async function activate(page: Page, name: string, hasTouch: boolean) {
+  const target = page.getByRole("button", { name })
+  if (hasTouch) await target.tap()
+  else await target.click()
 }
 
 async function startTimer(page: Page) {
@@ -66,7 +86,7 @@ test.describe("Kids mouse timer", () => {
     expect(startInView).toBe(true)
   })
 
-  test("minutes slider works from the keyboard", async ({ page }) => {
+  test("minutes slider works from the keyboard and snaps when the piece length changes", async ({ page }) => {
     await page.goto("/")
     const slider = page.getByRole("slider", { name: "Minutes" })
     await expect(slider).toHaveAttribute("aria-valuenow", "2")
@@ -77,22 +97,29 @@ test.describe("Kids mouse timer", () => {
     await expect(page.getByText("2:30")).toBeVisible()
     await expect(page.getByText("5 pieces")).toBeVisible()
 
+    // Switching to 1-minute pieces re-snaps 2:30 onto the whole-minute grid.
+    await page.getByRole("radio", { name: "1 min" }).click()
+    await expect(slider).toHaveAttribute("aria-valuenow", "3")
+    await expect(page.getByText("3 pieces")).toBeVisible()
+
+    await slider.focus()
     await page.keyboard.press("Home")
-    await expect(slider).toHaveAttribute("aria-valuenow", "0.5")
-    await expect(page.getByText("0:30")).toBeVisible()
+    await expect(slider).toHaveAttribute("aria-valuenow", "1")
+    await expect(page.getByText("1:00")).toBeVisible()
   })
 
-  test("start, pause, resume keeps remaining time from snapping back", async ({ page }) => {
+  test("start, hold to pause, tap to resume keeps remaining time from snapping back", async ({ page }, testInfo) => {
+    const hasTouch = Boolean(testInfo.project.use.hasTouch)
     await page.goto("/")
     await startTimer(page)
 
     await page.waitForTimeout(2500)
     const remainingAfterRun = await readRemaining(page)
     expect(remainingAfterRun).toBeLessThan(120)
-    expect(remainingAfterRun).toBeGreaterThan(110)
+    expect(remainingAfterRun).toBeGreaterThan(115)
     await expect(page.getByRole("img", { name: "0 of 4 cheese pieces eaten" })).toBeVisible()
 
-    await holdToPause(page)
+    await pressPause(page, 900, hasTouch)
     await expect(page.getByRole("button", { name: "Play" })).toBeVisible()
     const remainingAfterPause = await readRemaining(page)
 
@@ -100,19 +127,20 @@ test.describe("Kids mouse timer", () => {
     const remainingWhilePaused = await readRemaining(page)
     expect(Math.abs(remainingWhilePaused - remainingAfterPause)).toBeLessThanOrEqual(1)
 
-    await page.getByRole("button", { name: "Play" }).click()
+    await activate(page, "Play", hasTouch)
     await expect(page.getByRole("button", { name: "Hold to pause" })).toBeVisible()
     await page.waitForTimeout(2000)
     const remainingAfterResume = await readRemaining(page)
     expect(remainingAfterResume).toBeLessThan(remainingWhilePaused)
-    expect(remainingAfterResume).toBeGreaterThan(remainingWhilePaused - 5)
+    expect(remainingAfterResume).toBeGreaterThan(remainingWhilePaused - 4)
   })
 
-  test("a quick tap while running does not pause", async ({ page }) => {
+  test("a press shorter than the hold does not pause", async ({ page }, testInfo) => {
+    const hasTouch = Boolean(testInfo.project.use.hasTouch)
     await page.goto("/")
     await startTimer(page)
 
-    await page.getByRole("button", { name: "Hold to pause" }).click()
+    await pressPause(page, 300, hasTouch)
     await page.waitForTimeout(300)
     await expect(page.getByRole("button", { name: "Hold to pause" })).toBeVisible()
     await expect(page.getByRole("button", { name: "Play" })).toHaveCount(0)
@@ -131,10 +159,7 @@ test.describe("Kids mouse timer", () => {
     await page.goto(SHORT_RUN_URL)
     await expect(page.getByText("0:06")).toBeVisible()
     await startTimer(page)
-    const runner = page.getByTestId("runner")
     await expect(page.getByRole("img", { name: "0 of 1 cheese piece eaten" })).toBeVisible()
-    const startBox = await runner.boundingBox()
-    if (!startBox) throw new Error("Runner has no box")
 
     await expect(page.getByRole("heading", { name: "All done!" })).toBeVisible({
       timeout: SHORT_RUN_TIMEOUT,
@@ -142,13 +167,17 @@ test.describe("Kids mouse timer", () => {
     await expect(page.getByText("The mouse ate every piece and went home.")).toBeVisible()
     await expect(page.getByTestId("play-again")).toBeFocused()
 
-    // The mouse travelled from the cheese to the hole (one cell to the right).
+    // The mouse ends up inside the mouse hole's cell.
     await expect
       .poll(async () => {
-        const box = await runner.boundingBox()
-        return box ? box.x + box.width / 2 - (startBox.x + startBox.width / 2) : 0
+        const runner = await page.getByTestId("runner").boundingBox()
+        const goal = await page.getByTestId("goal").boundingBox()
+        if (!runner || !goal) return false
+        const cx = runner.x + runner.width / 2
+        const cy = runner.y + runner.height / 2
+        return cx >= goal.x && cx <= goal.x + goal.width && cy >= goal.y && cy <= goal.y + goal.height
       })
-      .toBeGreaterThan(40)
+      .toBe(true)
 
     await page.getByTestId("play-again").click()
 
@@ -156,6 +185,16 @@ test.describe("Kids mouse timer", () => {
     await expect(page.getByRole("button", { name: "Start timer" })).toBeVisible()
     await expect(page.getByText("0:06", { exact: true }).first()).toBeVisible()
     await expect(page.getByText("The mouse eats cheese, then runs home.")).toBeVisible()
+  })
+
+  test("Escape closes the celebration", async ({ page }) => {
+    await page.goto(SHORT_RUN_URL)
+    await startTimer(page)
+    await expect(page.getByRole("dialog")).toBeVisible({ timeout: SHORT_RUN_TIMEOUT })
+
+    await page.keyboard.press("Escape")
+    await expect(page.getByRole("dialog")).toHaveCount(0)
+    await expect(page.getByRole("button", { name: "Start timer" })).toBeVisible()
   })
 
   test("race theme start and back to setup", async ({ page }) => {

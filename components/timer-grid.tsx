@@ -2,9 +2,8 @@
 
 import { useEffect, useRef, useState } from "react"
 import { motion, useReducedMotion } from "framer-motion"
+import { THEMES, type ThemeType } from "./theme"
 import { ANIM_SPEED, Cheese, Cone, FinishFlag, Mouse, MouseHole, RaceCar } from "./timer-icons"
-
-export type ThemeType = "mouse" | "racecar"
 
 interface TimerGridProps {
   totalIntervals: number
@@ -81,7 +80,7 @@ export function TimerGrid({
   // The character is one persistent element positioned over the grid from the
   // known cell geometry, so moving to the next cell is a plain x/y animation.
   const pitch = cell + gap
-  const place = theme === "mouse" ? { left: -0.06, bottom: -0.04, size: 0.6 } : { left: 0.08, bottom: 0.08, size: 0.84 }
+  const { place, piece } = THEMES[theme]
   const characterSize = cell * place.size
   const characterX = (characterIndex % cols) * pitch + place.left * cell + (arrived ? 0.3 * cell : 0)
   const characterY =
@@ -123,15 +122,7 @@ export function TimerGrid({
     <div
       ref={boxRef}
       role="img"
-      aria-label={`${completedIntervals} of ${totalIntervals} ${
-        theme === "mouse"
-          ? totalIntervals === 1
-            ? "cheese piece eaten"
-            : "cheese pieces eaten"
-          : totalIntervals === 1
-            ? "cone passed"
-            : "cones passed"
-      }`}
+      aria-label={`${completedIntervals} of ${totalIntervals} ${totalIntervals === 1 ? piece.singular : piece.plural}`}
       className="flex size-full min-h-0 items-center justify-center"
     >
       {cell > 0 && (
@@ -184,6 +175,7 @@ export function TimerGrid({
           })}
 
           <motion.div
+            data-testid="goal"
             className="relative"
             animate={arrived && !reduceMotion ? { scale: [1, 1.08, 1] } : { scale: 1 }}
             transition={{ duration: 0.9, repeat: arrived ? 2 : 0 }}

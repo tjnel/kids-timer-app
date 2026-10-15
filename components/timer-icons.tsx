@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { motion, useReducedMotion } from "framer-motion"
-import { CarSvg, CheeseSvg, FlagSvg, MouseEatSvg, MouseIdleSvg, MouseRunSvg } from "./art"
+import { CarSvg, CheeseSvg, ConeSvg, FlagSvg, MouseEatSvg, MouseHoleSvg, MouseIdleSvg, MouseRunSvg } from "./art"
 
 /** Slow preset: 0.55x of the original feel (fps x speed, duration / speed). */
 export const ANIM_SPEED = 0.55
@@ -17,6 +17,8 @@ const CHEESE_IDLE_DURATION = 0.4 / ANIM_SPEED
 const CAR_DURATION = 0.25 / ANIM_SPEED
 const CONE_WOBBLE_DURATION = 0.2 / ANIM_SPEED
 const CONE_SETTLE_DURATION = 0.3 / ANIM_SPEED
+
+const STILL = "pointer-events-none select-none"
 
 /** Cycles 0..frameCount-1 at `fps` while `playing`; holds the last frame otherwise. */
 function useFrameCycle(frameCount: number, fps: number, playing: boolean) {
@@ -34,11 +36,12 @@ function useFrameCycle(frameCount: number, fps: number, playing: boolean) {
   return frame % frameCount
 }
 
+/** `playing` drives all motion; the static mouse is used in headers and pickers. */
 export function Mouse({
   className = "",
   isMoving = false,
   isEating = false,
-  playing,
+  playing = false,
 }: {
   className?: string
   isMoving?: boolean
@@ -46,27 +49,18 @@ export function Mouse({
   playing?: boolean
 }) {
   const reduceMotion = useReducedMotion()
-  const isAnimating = playing ?? (isMoving || isEating)
-  const frame = useFrameCycle(4, isEating ? EAT_FPS : RUN_FPS, isAnimating && (isEating || isMoving))
-
-  const animate =
-    reduceMotion || !isAnimating
-      ? {}
-      : isEating
-        ? { rotate: [0, 4, 0, -3, 0], y: [0, 1, 0, 1, 0] }
-        : isMoving
-          ? { y: [0, -3, 0] }
-          : { y: [0, -2, 0] }
+  const frame = useFrameCycle(4, isEating ? EAT_FPS : RUN_FPS, playing && (isEating || isMoving))
+  const animating = playing && !reduceMotion
 
   return (
     <motion.div
-      className={`${className} pointer-events-none select-none`}
+      className={`${className} ${STILL}`}
       aria-hidden="true"
-      animate={animate}
+      animate={!animating ? {} : isEating ? { rotate: [0, 4, 0, -3, 0], y: [0, 1, 0, 1, 0] } : { y: [0, -3, 0] }}
       transition={{
         type: "tween",
         duration: isEating ? EAT_DURATION : MOVE_DURATION,
-        repeat: reduceMotion || !isAnimating ? 0 : isMoving || isEating ? Infinity : 2,
+        repeat: animating ? Infinity : 0,
         repeatType: "mirror",
         ease: "easeInOut",
       }}
@@ -92,7 +86,7 @@ export function Cheese({
 
   return (
     <motion.div
-      className={`${className} pointer-events-none select-none`}
+      className={`${className} ${STILL}`}
       aria-hidden="true"
       animate={
         reduceMotion
@@ -117,34 +111,20 @@ export function Cheese({
 export function RaceCar({
   className = "",
   isMoving = false,
-  playing,
+  playing = false,
 }: {
   className?: string
   isMoving?: boolean
   playing?: boolean
 }) {
-  const isAnimating = playing ?? isMoving
-  const frame = useFrameCycle(3, DRIVE_FPS, isAnimating && isMoving)
+  const frame = useFrameCycle(3, DRIVE_FPS, playing && isMoving)
 
   return (
     <motion.div
-      className={`${className} pointer-events-none select-none`}
+      className={`${className} ${STILL}`}
       aria-hidden="true"
-      animate={
-        isAnimating
-          ? {
-              x: [0, 2, 0, -1, 0],
-              y: [0, -1, 0, -0.5, 0],
-              rotate: [0, 0.4, 0, -0.2, 0],
-            }
-          : {}
-      }
-      transition={{
-        type: "tween",
-        duration: CAR_DURATION,
-        repeat: isAnimating ? Infinity : 0,
-        ease: "linear",
-      }}
+      animate={playing ? { x: [0, 2, 0, -1, 0], y: [0, -1, 0, -0.5, 0], rotate: [0, 0.4, 0, -0.2, 0] } : {}}
+      transition={{ type: "tween", duration: CAR_DURATION, repeat: playing ? Infinity : 0, ease: "linear" }}
     >
       <CarSvg driving={isMoving} frame={frame} />
     </motion.div>
@@ -154,23 +134,17 @@ export function RaceCar({
 export function FinishFlag({ className = "" }: { className?: string }) {
   const frame = useFrameCycle(3, FLAG_FPS, true)
   return (
-    <div className={`${className} pointer-events-none select-none`} aria-hidden="true">
+    <div className={`${className} ${STILL}`} aria-hidden="true">
       <FlagSvg frame={frame} />
     </div>
   )
 }
 
-export function MouseHole({
-  className = "",
-  arrived = false,
-}: {
-  className?: string
-  arrived?: boolean
-}) {
+export function MouseHole({ className = "", arrived = false }: { className?: string; arrived?: boolean }) {
   const reduceMotion = useReducedMotion()
   return (
     <motion.div
-      className={`${className} pointer-events-none select-none`}
+      className={`${className} ${STILL}`}
       aria-hidden="true"
       animate={reduceMotion ? { scale: 1 } : arrived ? { scale: [1, 1.08, 1] } : { scale: [1, 1.05, 1] }}
       transition={{
@@ -180,26 +154,7 @@ export function MouseHole({
         ease: "easeInOut",
       }}
     >
-      <svg viewBox="0 0 64 64" className="size-full">
-        <ellipse cx="32" cy="56" rx="16" ry="3.2" fill="#2e1a08" opacity="0.18" />
-        <polygon points="32,8 54,26 10,26" fill="#b3391c" />
-        <polygon points="32,12 48,26 16,26" fill="#d6481f" />
-        <rect x="14" y="25" width="36" height="28" rx="3" fill="#8f5a24" stroke="#412812" strokeWidth="2" />
-        <rect x="18" y="29" width="10" height="8" rx="1.5" fill="#fde68a" />
-        <rect x="19" y="30" width="3.5" height="6" fill="#fff7d6" opacity="0.8" />
-        <ellipse cx="38" cy="44" rx={arrived ? 7 : 8.5} ry={arrived ? 10 : 12} fill="#1c1917" />
-        <ellipse cx="38" cy="44" rx="5.5" ry="8.5" fill="#292524" />
-        {!arrived && (
-          <path
-            d="M34 38c1.5 3 3 5 4 5s2.5-2 4-5"
-            fill="none"
-            stroke="#fde68a"
-            strokeOpacity="0.4"
-            strokeWidth="1.4"
-            strokeLinecap="round"
-          />
-        )}
-      </svg>
+      <MouseHoleSvg arrived={arrived} />
     </motion.div>
   )
 }
@@ -215,51 +170,29 @@ export function Cone({
   passProgress?: number
   isBeingPassed?: boolean
 }) {
-  if (passed) {
-    return (
-      <motion.svg
-        viewBox="0 0 64 64"
-        className={className}
-        aria-hidden="true"
-        initial={{ rotate: 0, x: 0 }}
-        animate={{ rotate: -28, x: 4, opacity: 0.85 }}
-        transition={{ duration: CONE_SETTLE_DURATION, type: "spring" }}
-      >
-        <ellipse cx="36" cy="50" rx="18" ry="4" fill="#2e1a08" opacity="0.18" />
-        <polygon points="24,52 50,40 50,48 24,56" fill="#ff6b00" opacity="0.9" />
-        <rect x="22" y="50" width="6" height="24" fill="#ff6b00" rx="2" transform="rotate(-70 25 52)" />
-      </motion.svg>
-    )
-  }
-
-  const wobbleIntensity = passProgress * 8
-  const scaleEffect = 1 - passProgress * 0.15
+  const reduceMotion = useReducedMotion()
+  const wobble = passProgress * 8
 
   return (
-    <motion.svg
-      viewBox="0 0 64 64"
-      className={className}
+    <motion.div
+      className={`${className} ${STILL}`}
       aria-hidden="true"
       animate={
-        isBeingPassed
-          ? {
-              rotate: [-wobbleIntensity, wobbleIntensity, -wobbleIntensity],
-              scale: scaleEffect,
-            }
-          : { scale: 1 }
+        passed
+          ? { rotate: -28, x: 4, opacity: 0.85, scale: 1 }
+          : isBeingPassed && !reduceMotion
+            ? { rotate: [-wobble, wobble, -wobble], scale: 1 - passProgress * 0.15, x: 0, opacity: 1 }
+            : { rotate: 0, scale: 1, x: 0, opacity: 1 }
       }
       transition={
-        isBeingPassed
-          ? { duration: CONE_WOBBLE_DURATION, repeat: Infinity, ease: "easeInOut" }
-          : { duration: CONE_SETTLE_DURATION }
+        passed
+          ? { duration: CONE_SETTLE_DURATION, type: "spring" }
+          : isBeingPassed && !reduceMotion
+            ? { duration: CONE_WOBBLE_DURATION, repeat: Infinity, ease: "easeInOut" }
+            : { duration: CONE_SETTLE_DURATION }
       }
     >
-      <ellipse cx="32" cy="54" rx={14 - passProgress * 4} ry={3 - passProgress} fill="#2e1a08" opacity="0.18" />
-      <polygon points="32,12 44,52 20,52" fill="#ff6b00" />
-      <polygon points="32,18 26,36 38,36" fill="#fff" opacity="0.25" />
-      <rect x="18" y="48" width="28" height="6" fill="#ff6b00" rx="2" />
-      <rect x="24" y="28" width="16" height="4" fill="#fff" />
-      <rect x="22" y="38" width="20" height="4" fill="#fff" />
-    </motion.svg>
+      <ConeSvg knocked={passed} progress={passProgress} />
+    </motion.div>
   )
 }

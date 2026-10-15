@@ -1,14 +1,13 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 
 export type IntervalType = "30sec" | "1min"
+export type TimerStatus = Phase["kind"]
 
 interface UseTimerOptions {
   initialMinutes: number
   intervalType: IntervalType
-  onIntervalComplete?: (completedIntervals: number) => void
-  onTimerComplete?: () => void
 }
 
 type Phase =
@@ -18,6 +17,7 @@ type Phase =
   | { kind: "done" }
 
 const UI_TICK_MS = 50
+export const MAX_MINUTES = 15
 
 type RunningPhase = Extract<Phase, { kind: "running" }>
 
@@ -35,27 +35,30 @@ export function intervalsFor(minutes: number, intervalType: IntervalType) {
   return Math.max(1, Math.ceil((minutes * 60) / intervalSeconds(intervalType)))
 }
 
+/** The one policy for valid timer lengths: whole intervals, at least one, at most MAX_MINUTES. */
+export function snapMinutes(raw: number, intervalType: IntervalType) {
+  const step = intervalSeconds(intervalType) / 60
+  if (!Number.isFinite(raw)) return step
+  return Math.max(step, Math.min(MAX_MINUTES, Math.round(raw / step) * step))
+}
+
+/** "m:ss" for a number of seconds. */
+export function formatClock(totalSeconds: number) {
+  const whole = Math.max(0, Math.round(totalSeconds))
+  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`
+}
+
 /**
  * Elapsed-time timer. Everything the UI needs is derived from the current
  * phase and the clock, so a backgrounded tab catches up correctly on return.
  */
-export function useTimer({
-  initialMinutes,
-  intervalType,
-  onIntervalComplete,
-  onTimerComplete,
-}: UseTimerOptions) {
+export function useTimer({ initialMinutes, intervalType }: UseTimerOptions) {
   const intervalDuration = intervalSeconds(intervalType)
   const configuredTotal = initialMinutes * 60
   const totalIntervals = intervalsFor(initialMinutes, intervalType)
 
   const [phase, setPhase] = useState<Phase>({ kind: "idle" })
   const [now, setNow] = useState(0)
-
-  const callbacks = useRef({ onIntervalComplete, onTimerComplete })
-  useEffect(() => {
-    callbacks.current = { onIntervalComplete, onTimerComplete }
-  })
 
   const remaining = (() => {
     switch (phase.kind) {
@@ -79,9 +82,8 @@ export function useTimer({
     phase.kind === "done"
       ? totalIntervals
       : Math.min(totalIntervals, Math.floor(elapsed / intervalDuration))
-  const currentIntervalProgress =
-    phase.kind === "done" ? 1 : Math.min(1, (elapsed % intervalDuration) / intervalDuration)
-  const isRunning = phase.kind === "running"
+  const intervalElapsedSeconds = phase.kind === "done" ? intervalDuration : elapsed % intervalDuration
+  const currentIntervalProgress = Math.min(1, intervalElapsedSeconds / intervalDuration)
 
   useEffect(() => {
     if (phase.kind !== "running") return
@@ -104,34 +106,18 @@ export function useTimer({
     return () => window.cancelAnimationFrame(raf)
   }, [phase])
 
-  const announcedIntervals = useRef(0)
-  useEffect(() => {
-    if (completedIntervals > announcedIntervals.current) {
-      announcedIntervals.current = completedIntervals
-      callbacks.current.onIntervalComplete?.(completedIntervals)
-    } else if (completedIntervals < announcedIntervals.current) {
-      announcedIntervals.current = completedIntervals
-    }
-  }, [completedIntervals])
-
-  const announcedDone = useRef(false)
-  useEffect(() => {
-    if (phase.kind === "done" && !announcedDone.current) {
-      announcedDone.current = true
-      callbacks.current.onTimerComplete?.()
-    } else if (phase.kind !== "done") {
-      announcedDone.current = false
-    }
-  }, [phase.kind])
-
+  /** Starts from idle or resumes from paused; a no-op while running or done. */
   const start = useCallback(() => {
     const startedAt = performance.now()
     setNow(startedAt)
-    setPhase((current) => ({
-      kind: "running",
-      remainingAtStart: current.kind === "paused" ? current.remaining : configuredTotal,
-      startedAt,
-    }))
+    setPhase((current) => {
+      if (current.kind === "running" || current.kind === "done") return current
+      return {
+        kind: "running",
+        remainingAtStart: current.kind === "paused" ? current.remaining : configuredTotal,
+        startedAt,
+      }
+    })
   }, [configuredTotal])
 
   const pause = useCallback(() => {
@@ -145,19 +131,19 @@ export function useTimer({
     setPhase({ kind: "idle" })
   }, [])
 
-  const displaySeconds = Math.max(0, Math.ceil(remaining))
-
   return {
-    minutes: Math.floor(displaySeconds / 60),
-    seconds: displaySeconds % 60,
-    totalSeconds: displaySeconds,
-    isRunning,
+    status: phase.kind,
+    remainingSeconds: Math.max(0, Math.ceil(remaining)),
+    isRunning: phase.kind === "running",
     isDone: phase.kind === "done",
     completedIntervals,
     totalIntervals,
     currentIntervalProgress,
+    intervalElapsedSeconds,
     start,
     pause,
     reset,
   }
 }
+
+export type Timer = ReturnType<typeof useTimer>

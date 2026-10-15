@@ -157,6 +157,54 @@ export function CheeseSvg({ frame = 0 }: { frame?: number }) {
   )
 }
 
+export function MouseHoleSvg({ arrived = false }: { arrived?: boolean }) {
+  return (
+    <svg viewBox="0 0 64 64" className="size-full" aria-hidden="true">
+      <ellipse cx="32" cy="56" rx="16" ry="3.2" fill="#2e1a08" opacity="0.18" />
+      <polygon points="32,8 54,26 10,26" fill="#b3391c" />
+      <polygon points="32,12 48,26 16,26" fill="#d6481f" />
+      <rect x="14" y="25" width="36" height="28" rx="3" fill="#8f5a24" stroke="#412812" strokeWidth="2" />
+      <rect x="18" y="29" width="10" height="8" rx="1.5" fill="#fde68a" />
+      <rect x="19" y="30" width="3.5" height="6" fill="#fff7d6" opacity="0.8" />
+      <ellipse cx="38" cy="44" rx={arrived ? 7 : 8.5} ry={arrived ? 10 : 12} fill="#1c1917" />
+      <ellipse cx="38" cy="44" rx="5.5" ry="8.5" fill="#292524" />
+      {!arrived && (
+        <path
+          d="M34 38c1.5 3 3 5 4 5s2.5-2 4-5"
+          fill="none"
+          stroke="#fde68a"
+          strokeOpacity="0.4"
+          strokeWidth="1.4"
+          strokeLinecap="round"
+        />
+      )}
+    </svg>
+  )
+}
+
+/** Upright cone shrinking its shadow as the car gets close; `knocked` is the passed state. */
+export function ConeSvg({ knocked = false, progress = 0 }: { knocked?: boolean; progress?: number }) {
+  if (knocked) {
+    return (
+      <svg viewBox="0 0 64 64" className="size-full" aria-hidden="true">
+        <ellipse cx="36" cy="50" rx="18" ry="4" fill="#2e1a08" opacity="0.18" />
+        <polygon points="24,52 50,40 50,48 24,56" fill="#ff6b00" opacity="0.9" />
+        <rect x="22" y="50" width="6" height="24" fill="#ff6b00" rx="2" transform="rotate(-70 25 52)" />
+      </svg>
+    )
+  }
+  return (
+    <svg viewBox="0 0 64 64" className="size-full" aria-hidden="true">
+      <ellipse cx="32" cy="54" rx={14 - progress * 4} ry={3 - progress} fill="#2e1a08" opacity="0.18" />
+      <polygon points="32,12 44,52 20,52" fill="#ff6b00" />
+      <polygon points="32,18 26,36 38,36" fill="#fff" opacity="0.25" />
+      <rect x="18" y="48" width="28" height="6" fill="#ff6b00" rx="2" />
+      <rect x="24" y="28" width="16" height="4" fill="#fff" />
+      <rect x="22" y="38" width="20" height="4" fill="#fff" />
+    </svg>
+  )
+}
+
 export function CarSvg({ driving = false, frame = 0 }: { driving?: boolean; frame?: number }) {
   const bounce = driving ? (frame % 2 === 0 ? -1 : 1) : 0
   return (

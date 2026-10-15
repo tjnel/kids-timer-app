@@ -2,12 +2,22 @@
 
 import { motion, useReducedMotion } from "framer-motion"
 import { ConfettiBurst } from "./confetti-burst"
-import type { ThemeType } from "./timer-grid"
+import { THEMES, type ThemeType } from "./theme"
 import { FinishFlag, Mouse, MouseHole, RaceCar } from "./timer-icons"
 
 export function CelebrationOverlay({ theme, onClose }: { theme: ThemeType; onClose: () => void }) {
   const reduceMotion = useReducedMotion()
-  const title = theme === "mouse" ? "All done!" : "Winner!"
+  const { doneTitle, doneBody } = THEMES[theme]
+
+  // The dialog has one focusable control, so trapping focus means keeping Tab on it.
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Escape") {
+      event.preventDefault()
+      onClose()
+    } else if (event.key === "Tab") {
+      event.preventDefault()
+    }
+  }
 
   return (
     <motion.div
@@ -23,6 +33,7 @@ export function CelebrationOverlay({ theme, onClose }: { theme: ThemeType; onClo
         role="dialog"
         aria-modal="true"
         aria-labelledby="celebration-title"
+        onKeyDown={handleKeyDown}
         initial={{ scale: 0.7, y: 40, opacity: 0 }}
         animate={{ scale: 1, y: 0, opacity: 1 }}
         transition={{ type: "spring", duration: 0.7, bounce: 0.45 }}
@@ -52,11 +63,9 @@ export function CelebrationOverlay({ theme, onClose }: { theme: ThemeType; onClo
         </motion.div>
 
         <h2 id="celebration-title" className="mb-2 text-3xl font-extrabold tracking-tight sm:text-4xl">
-          {title}
+          {doneTitle}
         </h2>
-        <p className="mb-6 text-base text-muted-foreground">
-          {theme === "mouse" ? "The mouse ate every piece and went home." : "You crossed the finish line."}
-        </p>
+        <p className="mb-6 text-base text-muted-foreground">{doneBody}</p>
         <button
           type="button"
           data-testid="play-again"

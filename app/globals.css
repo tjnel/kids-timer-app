@@ -20,7 +20,6 @@
   --accent: #f4b91c;
   --border: rgba(65, 40, 18, 0.18);
   --ring: #2e1a08;
-  --radius: 1.25rem;
 }
 
 @theme inline {
@@ -39,10 +38,6 @@
   --color-accent: var(--accent);
   --color-border: var(--border);
   --color-ring: var(--ring);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
 }
 
 @layer base {

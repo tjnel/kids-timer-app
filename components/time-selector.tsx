@@ -1,8 +1,9 @@
 "use client"
 
-import { useCallback, useRef } from "react"
-import { motion } from "framer-motion"
-import { intervalsFor, type IntervalType } from "@/hooks/use-timer"
+import { useCallback, useRef, useState } from "react"
+import { AnimatePresence, motion } from "framer-motion"
+import { formatClock, intervalSeconds, intervalsFor, MAX_MINUTES, snapMinutes, type IntervalType } from "@/hooks/use-timer"
+import { ConfettiBurst } from "./confetti-burst"
 
 interface TimeSelectorProps {
   minutes: number
@@ -11,13 +12,12 @@ interface TimeSelectorProps {
   onIntervalTypeChange: (type: IntervalType) => void
 }
 
-const MAX_MINUTES = 15
 const PRESETS = [1, 2, 3, 5, 10, 15]
+const LABELLED_TICKS = new Set([5, 10, MAX_MINUTES])
+const BURST_THROTTLE_MS = 280
 
-export function formatMinutes(mins: number) {
-  const whole = Math.floor(mins)
-  const secs = Math.round((mins - whole) * 60)
-  return `${whole}:${String(secs).padStart(2, "0")}`
+function clockForMinutes(mins: number) {
+  return formatClock(mins * 60)
 }
 
 function tickLabel(mins: number) {
@@ -30,14 +30,27 @@ function tickLeft(value: number, minMinutes: number) {
 
 export function TimeSelector({ minutes, onMinutesChange, intervalType, onIntervalTypeChange }: TimeSelectorProps) {
   const sliderRef = useRef<HTMLDivElement>(null)
-  const minMinutes = intervalType === "1min" ? 1 : 0.5
-  const step = intervalType === "1min" ? 1 : 0.5
+  const [burst, setBurst] = useState(0)
+  const lastBurstAt = useRef(0)
+  const step = intervalSeconds(intervalType) / 60
+  const minMinutes = step
   const position = Math.max(0, Math.min(1, (minutes - minMinutes) / (MAX_MINUTES - minMinutes)))
   const pieces = intervalsFor(minutes, intervalType)
 
-  const snap = useCallback(
-    (raw: number) => Math.max(minMinutes, Math.min(MAX_MINUTES, Math.round(raw / step) * step)),
-    [minMinutes, step],
+  // A little confetti when the time goes up, so adding minutes feels like a treat.
+  const change = useCallback(
+    (raw: number) => {
+      const next = snapMinutes(raw, intervalType)
+      if (next > minutes) {
+        const now = performance.now()
+        if (now - lastBurstAt.current > BURST_THROTTLE_MS) {
+          lastBurstAt.current = now
+          setBurst((key) => key + 1)
+        }
+      }
+      onMinutesChange(next)
+    },
+    [intervalType, minutes, onMinutesChange],
   )
 
   const setFromClientX = useCallback(
@@ -46,9 +59,9 @@ export function TimeSelector({ minutes, onMinutesChange, intervalType, onInterva
       if (!el) return
       const rect = el.getBoundingClientRect()
       const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
-      onMinutesChange(snap(minMinutes + ratio * (MAX_MINUTES - minMinutes)))
+      change(minMinutes + ratio * (MAX_MINUTES - minMinutes))
     },
-    [minMinutes, onMinutesChange, snap],
+    [change, minMinutes],
   )
 
   const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -64,28 +77,29 @@ export function TimeSelector({ minutes, onMinutesChange, intervalType, onInterva
   }
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    const delta =
+    const target =
       event.key === "ArrowRight" || event.key === "ArrowUp"
-        ? step
+        ? minutes + step
         : event.key === "ArrowLeft" || event.key === "ArrowDown"
-          ? -step
+          ? minutes - step
           : event.key === "Home"
-            ? minMinutes - minutes
+            ? minMinutes
             : event.key === "End"
-              ? MAX_MINUTES - minutes
+              ? MAX_MINUTES
               : null
-    if (delta === null) return
+    if (target === null) return
     event.preventDefault()
-    onMinutesChange(snap(minutes + delta))
+    change(target)
   }
 
   const chooseInterval = (type: IntervalType) => {
     onIntervalTypeChange(type)
-    onMinutesChange(type === "1min" ? Math.max(1, Math.round(minutes)) : Math.max(0.5, Math.round(minutes * 2) / 2))
+    onMinutesChange(snapMinutes(minutes, type))
   }
 
   const ticks: number[] = []
   for (let value = Math.ceil(minMinutes); value <= MAX_MINUTES; value += 1) ticks.push(value)
+  const firstTick = ticks[0] ?? MAX_MINUTES
 
   return (
     <div className="flex w-full flex-col items-center gap-3 sm:gap-4">
@@ -112,7 +126,7 @@ export function TimeSelector({ minutes, onMinutesChange, intervalType, onInterva
 
       <div className="text-center">
         <p className="text-5xl font-extrabold tracking-tight text-foreground tabular-nums sm:text-6xl">
-          {formatMinutes(minutes)}
+          {clockForMinutes(minutes)}
         </p>
         <p className="mt-0.5 text-base font-semibold text-foreground-strong">
           {pieces} {pieces === 1 ? "piece" : "pieces"}
@@ -128,7 +142,7 @@ export function TimeSelector({ minutes, onMinutesChange, intervalType, onInterva
           aria-valuemin={minMinutes}
           aria-valuemax={MAX_MINUTES}
           aria-valuenow={minutes}
-          aria-valuetext={formatMinutes(minutes)}
+          aria-valuetext={clockForMinutes(minutes)}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onKeyDown={handleKeyDown}
@@ -162,7 +176,7 @@ export function TimeSelector({ minutes, onMinutesChange, intervalType, onInterva
         </div>
         <div aria-hidden="true" className="relative h-4">
           {ticks
-            .filter((value) => value === Math.ceil(minMinutes) || value === 5 || value === 10 || value === MAX_MINUTES)
+            .filter((value) => value === firstTick || LABELLED_TICKS.has(value))
             .map((value) => (
               <p
                 key={value}
@@ -184,7 +198,7 @@ export function TimeSelector({ minutes, onMinutesChange, intervalType, onInterva
               key={preset}
               aria-pressed={selected}
               whileTap={{ scale: 0.95 }}
-              onClick={() => onMinutesChange(preset)}
+              onClick={() => change(preset)}
               className={`min-h-11 min-w-12 rounded-full px-3 py-2 text-sm font-bold focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-foreground-strong ${
                 selected ? "bg-primary text-primary-foreground" : "bg-card text-card-foreground"
               }`}
@@ -194,6 +208,20 @@ export function TimeSelector({ minutes, onMinutesChange, intervalType, onInterva
           )
         })}
       </div>
+
+      <AnimatePresence>
+        {burst > 0 && (
+          <motion.div
+            key={burst}
+            initial={{ opacity: 1 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="pointer-events-none fixed inset-0 z-30"
+          >
+            <ConfettiBurst pieceCount={48} />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
