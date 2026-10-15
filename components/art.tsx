@@ -1,11 +1,11 @@
 "use client"
 
-/** Inline SVG stand-ins used until `/sprites/*.png` load (or if they 404). */
+/** Flat vector drawings for both themes. Frame-based variants take a `frame` index. */
 
 export function MouseIdleSvg() {
   return (
     <svg viewBox="0 0 64 64" className="size-full" aria-hidden="true">
-      <ellipse cx="32" cy="58" rx="14" ry="3" fill="#1e1b4b" opacity="0.12" />
+      <ellipse cx="32" cy="58" rx="14" ry="3" fill="#2e1a08" opacity="0.16" />
       <path
         d="M46 36c8 4 12 12 10 18"
         fill="none"
@@ -40,7 +40,7 @@ export function MouseEatSvg({ frame }: { frame: number }) {
   const pawY = f === 0 ? 40 : 34
   return (
     <svg viewBox="0 0 64 64" className="size-full" aria-hidden="true">
-      <ellipse cx="32" cy="58" rx="14" ry="3" fill="#1e1b4b" opacity="0.12" />
+      <ellipse cx="32" cy="58" rx="14" ry="3" fill="#2e1a08" opacity="0.16" />
       <circle cx="17" cy="16" r="10" fill="#e8ddd0" stroke="#5c4033" strokeWidth="2.2" />
       <circle cx="17" cy="16" r="5.5" fill="#ffb6c1" />
       <circle cx="47" cy="16" r="10" fill="#e8ddd0" stroke="#5c4033" strokeWidth="2.2" />
@@ -83,7 +83,7 @@ export function MouseRunSvg({ frame }: { frame: number }) {
   const backLeg = f === 0 || f === 3 ? 46 : 52
   return (
     <svg viewBox="0 0 64 64" className="size-full" aria-hidden="true">
-      <ellipse cx="32" cy="58" rx="16" ry="3" fill="#1e1b4b" opacity="0.12" />
+      <ellipse cx="32" cy="58" rx="16" ry="3" fill="#2e1a08" opacity="0.16" />
       <g transform={`rotate(${lean} 32 36)`}>
         <path
           d="M48 34c8 2 12 8 11 16"
@@ -113,13 +113,15 @@ export function CheeseSvg({ frame = 0 }: { frame?: number }) {
   if (f === 3) {
     return (
       <svg viewBox="0 0 64 64" className="size-full" aria-hidden="true">
-        <ellipse cx="32" cy="54" rx="12" ry="3" fill="#1e1b4b" opacity="0.1" />
-        <path d="M20 44l6-8 8 4-4 10z" fill="#ffd93d" stroke="#d4a017" strokeWidth="2" />
-        <path d="M36 46l8-6 6 8-10 4z" fill="#ffe566" stroke="#d4a017" strokeWidth="2" />
-        <circle cx="28" cy="50" r="2.4" fill="#ffd93d" stroke="#d4a017" strokeWidth="1.4" />
-        <circle cx="40" cy="52" r="1.8" fill="#ffe566" stroke="#d4a017" strokeWidth="1.2" />
-        <circle cx="24" cy="38" r="1.2" fill="#fff4a3" />
-        <circle cx="44" cy="36" r="1" fill="#fff4a3" />
+        <g transform="translate(32 40) scale(1.3) translate(-32 -46)">
+          <ellipse cx="32" cy="54" rx="12" ry="3" fill="#2e1a08" opacity="0.14" />
+          <path d="M20 44l6-8 8 4-4 10z" fill="#ffd93d" stroke="#d4a017" strokeWidth="2" />
+          <path d="M36 46l8-6 6 8-10 4z" fill="#ffe566" stroke="#d4a017" strokeWidth="2" />
+          <circle cx="28" cy="50" r="2.4" fill="#ffd93d" stroke="#d4a017" strokeWidth="1.4" />
+          <circle cx="40" cy="52" r="1.8" fill="#ffe566" stroke="#d4a017" strokeWidth="1.2" />
+          <circle cx="24" cy="38" r="1.2" fill="#fff4a3" />
+          <circle cx="44" cy="36" r="1" fill="#fff4a3" />
+        </g>
       </svg>
     )
   }
@@ -134,59 +136,23 @@ export function CheeseSvg({ frame = 0 }: { frame?: number }) {
 
   return (
     <svg viewBox="0 0 64 64" className="size-full" aria-hidden="true">
-      <ellipse cx="32" cy="54" rx="16" ry="3.4" fill="#1e1b4b" opacity="0.12" />
-      <polygon
-        points={`18,48 ${tipCut},22 50,48`}
-        fill="#ffd93d"
-        stroke="#d4a017"
-        strokeWidth="2.2"
-        strokeLinejoin="round"
-      />
-      <polygon points="18,48 50,48 46,40 24,40" fill="#f5c518" opacity="0.7" />
-      {f === 0 && <polygon points="48,22 50,48 42,40" fill="#ffe566" opacity="0.8" />}
-      {f > 0 && <path d={bite} fill="#fff6c2" stroke="#d4a017" strokeWidth="1.6" />}
-      <circle cx="28" cy="40" r="3.2" fill="#e6b800" />
-      <circle cx="36" cy="36" r="2.2" fill="#e6b800" />
-      {f < 2 && <circle cx="32" cy="44" r="2.6" fill="#e6b800" />}
-      {f === 0 && <path d="M22 30l3-3M23 31l4-1" stroke="#fff" strokeWidth="1.4" strokeLinecap="round" />}
-    </svg>
-  )
-}
-
-export function AppleSvg({ frame = 0 }: { frame?: number }) {
-  const f = Math.max(0, Math.min(5, frame))
-  if (f === 5) {
-    return (
-      <svg viewBox="0 0 64 64" className="size-full" aria-hidden="true">
-        <ellipse cx="32" cy="54" rx="10" ry="2.6" fill="#1e1b4b" opacity="0.1" />
-        <path d="M32 16c2 8 2 12 0 16-2-4-2-8 0-16z" fill="#c4a484" stroke="#5c4033" strokeWidth="1.4" />
-        <path d="M26 28c-2 8 0 18 6 22 6-4 8-14 6-22-4 2-8 2-12 0z" fill="#f5deb3" stroke="#c4a484" strokeWidth="2" />
-        <circle cx="30" cy="36" r="1.4" fill="#4a3728" />
-        <circle cx="34" cy="40" r="1.4" fill="#4a3728" />
-        <circle cx="30" cy="44" r="1.2" fill="#4a3728" />
-        <circle cx="34" cy="46" r="1.2" fill="#4a3728" />
-      </svg>
-    )
-  }
-
-  const biteRight = 12 + f * 5
-  return (
-    <svg viewBox="0 0 64 64" className="size-full" aria-hidden="true">
-      <ellipse cx="32" cy="54" rx="14" ry="3" fill="#1e1b4b" opacity="0.12" />
-      <path d="M32 14c1 6 3 8 6 10" fill="none" stroke="#5c4033" strokeWidth="2.2" strokeLinecap="round" />
-      {f < 4 && (
-        <path d="M38 16c4-1 7 2 6 6-4 0-6-2-6-6z" fill="#7cb342" stroke="#558b2f" strokeWidth="1.4" />
-      )}
-      <circle cx="32" cy="36" r="16" fill="#e53935" stroke="#b71c1c" strokeWidth="2.2" />
-      <path d="M22 28c4-6 10-8 14-6" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" opacity="0.35" />
-      {f > 0 && (
-        <path
-          d={`M${48 - biteRight * 0.15} 24c4 4 8 10 6 18-6 2-12-4-14-12 4-4 6-6 8-6z`}
-          fill="#fff8e7"
-          stroke="#b71c1c"
-          strokeWidth="1.6"
+      {/* The wedge is drawn in a 32x26 box; scale it up so it fills the cell. */}
+      <g transform="translate(32 36) scale(1.45) translate(-33 -37)">
+        <ellipse cx="33" cy="51" rx="17" ry="3" fill="#2e1a08" opacity="0.16" />
+        <polygon
+          points={`18,48 ${tipCut},22 50,48`}
+          fill="#ffd93d"
+          stroke="#d4a017"
+          strokeWidth="2"
+          strokeLinejoin="round"
         />
-      )}
+        <polygon points="18,48 50,48 46,40 24,40" fill="#f5c518" opacity="0.7" />
+        {f === 0 && <polygon points="48,22 50,48 42,40" fill="#ffe566" opacity="0.8" />}
+        {f > 0 && <path d={bite} fill="#fff6c2" stroke="#d4a017" strokeWidth="1.4" />}
+        <circle cx="28" cy="40" r="3.2" fill="#e6b800" />
+        <circle cx="36" cy="36" r="2.2" fill="#e6b800" />
+        {f < 2 && <circle cx="32" cy="44" r="2.6" fill="#e6b800" />}
+      </g>
     </svg>
   )
 }
@@ -195,7 +161,7 @@ export function CarSvg({ driving = false, frame = 0 }: { driving?: boolean; fram
   const bounce = driving ? (frame % 2 === 0 ? -1 : 1) : 0
   return (
     <svg viewBox="0 0 80 48" className="size-full" aria-hidden="true">
-      <ellipse cx="40" cy="42" rx="22" ry="3" fill="#1e1b4b" opacity="0.12" />
+      <ellipse cx="40" cy="42" rx="22" ry="3" fill="#2e1a08" opacity="0.16" />
       <g transform={`translate(0 ${bounce})`}>
         <path d="M16 30c2-10 10-16 24-16 12 0 22 6 26 16z" fill="#e53935" stroke="#b71c1c" strokeWidth="2" />
         <path d="M28 18c4-6 12-8 20-6l4 8H30z" fill="#81d4fa" stroke="#0288d1" strokeWidth="1.6" />
@@ -222,7 +188,7 @@ export function FlagSvg({ frame = 0 }: { frame?: number }) {
   const wave = 4 + (frame % 3) * 2
   return (
     <svg viewBox="0 0 64 64" className="size-full" aria-hidden="true">
-      <ellipse cx="24" cy="56" rx="10" ry="2.6" fill="#1e1b4b" opacity="0.12" />
+      <ellipse cx="24" cy="56" rx="10" ry="2.6" fill="#2e1a08" opacity="0.16" />
       <rect x="20" y="10" width="4" height="46" rx="1.5" fill="#5c4033" />
       <path
         d={`M24 12h22c-2 ${wave} 2 ${wave + 8} 0 ${wave + 16} 2 ${wave} -2 12 0 16H24z`}

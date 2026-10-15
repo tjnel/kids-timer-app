@@ -1,10 +1,8 @@
 "use client"
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { motion, useReducedMotion } from "framer-motion"
-import { ANIM_SPEED, Mouse, Cheese, RaceCar, FinishFlag, Cone, MouseHole } from "./timer-icons"
-import { ConfettiBurst } from "./confetti-burst"
-import { useMediaQuery } from "@/hooks/use-media-query"
+import { ANIM_SPEED, Cheese, Cone, FinishFlag, Mouse, MouseHole, RaceCar } from "./timer-icons"
 
 export type ThemeType = "mouse" | "racecar"
 
@@ -13,27 +11,36 @@ interface TimerGridProps {
   completedIntervals: number
   theme: ThemeType
   isRunning: boolean
-  intervalType: "30sec" | "1min"
   currentIntervalProgress: number
+  /** Upper bound for one cell so short timers do not become a few giant tiles. */
+  maxCell?: number
 }
 
-function maxColsFromWidth(isNarrow: boolean) {
-  return isNarrow ? 5 : 7
-}
-
-const HOP_DURATION = 0.35 / ANIM_SPEED
+const GAP_RATIO = 0.12
+const TRAVEL = { type: "spring", stiffness: 320 * ANIM_SPEED, damping: 26 } as const
 const CRUMB_DURATION = 0.45 / ANIM_SPEED
 const CRUMB_STAGGER = 0.04 / ANIM_SPEED
-const TRAVEL_STIFFNESS = 320 * ANIM_SPEED
-const JUST_ATE_MS = Math.round(600 / ANIM_SPEED)
+const CRUMBS = Array.from({ length: 6 }, (_, i) => ({
+  x: ((i * 37) % 60) - 30,
+  y: ((i * 53) % 60) - 30,
+}))
 
-function gridColsFor(totalIntervals: number, maxCols: number) {
-  const withGoal = totalIntervals + 1
-  if (withGoal <= 5) return Math.min(withGoal, maxCols)
-  if (totalIntervals <= 6) return Math.min(totalIntervals + 1, maxCols)
-  if (totalIntervals <= 12) return Math.min(6, maxCols)
-  if (totalIntervals <= 20) return Math.min(7, maxCols)
-  return Math.min(8, maxCols)
+/**
+ * Picks the column count whose cells fill the box best. Ties go to the layout
+ * with fewer empty cells, then to more columns.
+ */
+export function fitGrid(count: number, width: number, height: number, maxCell: number) {
+  let best = { cols: 1, pitch: 0, empty: Infinity }
+  for (let cols = 1; cols <= count; cols++) {
+    const rows = Math.ceil(count / cols)
+    const pitch = Math.min(width / cols, height / rows, maxCell)
+    const empty = cols * rows - count
+    const better =
+      pitch > best.pitch + 0.5 || (Math.abs(pitch - best.pitch) <= 0.5 && empty < best.empty)
+    if (better) best = { cols, pitch, empty }
+  }
+  const gap = Math.round(best.pitch * GAP_RATIO)
+  return { cols: best.cols, cell: Math.floor(best.pitch - gap), gap }
 }
 
 export function TimerGrid({
@@ -42,365 +49,136 @@ export function TimerGrid({
   theme,
   isRunning,
   currentIntervalProgress,
+  maxCell = 150,
 }: TimerGridProps) {
   const reduceMotion = useReducedMotion()
-  const isNarrow = useMediaQuery("(max-width: 399px)")
-  const cols = gridColsFor(totalIntervals, maxColsFromWidth(isNarrow))
-  const gridRef = useRef<HTMLDivElement>(null)
-  const [metrics, setMetrics] = useState({ cell: 0, gap: 8 })
-  const [prevCompleted, setPrevCompleted] = useState(completedIntervals)
-  const [justAte, setJustAte] = useState(false)
+  const boxRef = useRef<HTMLDivElement>(null)
+  const [box, setBox] = useState({ width: 0, height: 0 })
 
   useEffect(() => {
-    if (completedIntervals > prevCompleted) {
-      setJustAte(true)
-      const timer = window.setTimeout(() => setJustAte(false), JUST_ATE_MS)
-      setPrevCompleted(completedIntervals)
-      return () => window.clearTimeout(timer)
-    }
-    if (completedIntervals < prevCompleted) {
-      setPrevCompleted(completedIntervals)
-      setJustAte(false)
-    }
-  }, [completedIntervals, prevCompleted])
-
-  useLayoutEffect(() => {
-    const el = gridRef.current
+    const el = boxRef.current
     if (!el) return
+    const observer = new ResizeObserver((entries) => {
+      const rect = entries[0]?.contentRect
+      if (rect) setBox({ width: rect.width, height: rect.height })
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
 
-    const update = () => {
-      const styles = window.getComputedStyle(el)
-      const gap = Number.parseFloat(styles.columnGap || styles.gap) || 8
-      const width = el.clientWidth
-      const cell = cols > 0 ? (width - gap * (cols - 1)) / cols : 0
-      setMetrics({ cell, gap })
-    }
+  const cellCount = totalIntervals + 1
+  const { cols, cell, gap } = fitGrid(cellCount, box.width, box.height, maxCell)
 
-    update()
-    const ro = new ResizeObserver(update)
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [cols, totalIntervals])
-
-  const onCurrentFood = completedIntervals < totalIntervals
-  const goingHome = theme === "mouse" && completedIntervals >= totalIntervals
+  const arrived = completedIntervals >= totalIntervals
   const characterIndex = Math.min(completedIntervals, totalIntervals)
-  const characterCol = characterIndex % cols
-  const characterRow = Math.floor(characterIndex / cols)
   const intervalActive = isRunning || currentIntervalProgress > 0
-  const isEating = onCurrentFood && intervalActive && currentIntervalProgress >= 0.08
-  const isMoving =
-    (onCurrentFood && intervalActive && currentIntervalProgress < 0.08) || goingHome
-  const nibbleOffset = theme === "mouse" && onCurrentFood
-  const charSize = goingHome
-    ? metrics.cell * 0.16
-    : nibbleOffset
-      ? metrics.cell * 0.56
-      : metrics.cell * 0.82
-  const xInset = goingHome
-    ? metrics.cell * 0.42
-    : nibbleOffset
-      ? characterCol === 0
-        ? metrics.cell * 0.04
-        : metrics.cell * 0.02
-      : metrics.cell * 0.09
-  const yInset = goingHome
-    ? metrics.cell * 0.42
-    : nibbleOffset
-      ? metrics.cell * 0.4
-      : metrics.cell * 0.09
-  const charLeft = Math.max(0, characterCol * (metrics.cell + metrics.gap) + xInset)
-  const charTop = Math.max(0, characterRow * (metrics.cell + metrics.gap) + yInset)
-  const charOpacity = goingHome ? 0 : 1
+  const isEating = !arrived && intervalActive && currentIntervalProgress >= 0.08
+  const isMoving = (!arrived && intervalActive && currentIntervalProgress < 0.08) || arrived
 
-  const crumbOffsets = useMemo(
-    () =>
-      Array.from({ length: 6 }, (_, i) => ({
-        x: ((i * 37) % 60) - 30,
-        y: ((i * 53) % 60) - 30,
-      })),
-    [],
+  const character = (
+    <motion.div
+      layoutId="runner"
+      className="pointer-events-none absolute z-10"
+      style={
+        theme === "mouse"
+          ? { left: "-6%", bottom: "-4%", width: "60%", height: "60%" }
+          : { left: "8%", bottom: "8%", width: "84%", height: "84%" }
+      }
+      animate={arrived ? { scale: 0.15, opacity: 0, x: "30%", y: "-10%" } : { scale: 1, opacity: 1, x: 0, y: 0 }}
+      transition={{
+        layout: reduceMotion ? { duration: 0 } : TRAVEL,
+        default: reduceMotion
+          ? { duration: 0 }
+          : { duration: 0.6 / ANIM_SPEED, delay: arrived ? 0.25 / ANIM_SPEED : 0, ease: "easeIn" },
+      }}
+    >
+      <motion.div
+        key={completedIntervals}
+        className="size-full"
+        animate={completedIntervals > 0 && !arrived && !reduceMotion ? { y: [0, -8, 0] } : { y: 0 }}
+        transition={{ duration: 0.48, type: "tween", ease: "easeOut" }}
+      >
+        {theme === "mouse" ? (
+          <Mouse className="size-full" isMoving={isMoving} isEating={isEating} playing={isRunning || arrived} />
+        ) : (
+          <RaceCar className="size-full" isMoving={isMoving || isEating} playing={isRunning} />
+        )}
+      </motion.div>
+    </motion.div>
   )
 
   return (
-    <div className="mx-auto w-full max-w-lg p-1 sm:p-3">
-      <div className="relative">
-      <div
-        ref={gridRef}
-        className="grid w-full gap-1.5 sm:gap-2 md:gap-3"
-        style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
-      >
-        {Array.from({ length: totalIntervals }, (_, i) => {
-          const isCompleted = i < completedIntervals
-          const isCurrent = i === completedIntervals && (isRunning || currentIntervalProgress > 0) && i < totalIntervals
-          const showCurrent = i === completedIntervals && completedIntervals < totalIntervals
-          const justCompleted = i === completedIntervals - 1 && justAte
-          const eatProgress = showCurrent ? currentIntervalProgress : isCompleted ? 1 : 0
-
-          return (
-            <div
-              key={`interval-${i}`}
-              className="relative flex aspect-square items-center justify-center"
-            >
-              {showCurrent && !reduceMotion && (
-                <div
-                  className="absolute inset-0 rounded-full opacity-70"
-                  style={{
-                    background:
-                      theme === "mouse"
-                        ? "radial-gradient(circle, rgba(255,217,61,0.35) 0%, transparent 70%)"
-                        : "radial-gradient(circle, rgba(255,107,0,0.28) 0%, transparent 70%)",
-                  }}
-                />
-              )}
-
-              {justCompleted && theme === "mouse" && !reduceMotion && (
-                <div className="pointer-events-none absolute inset-0">
-                  {crumbOffsets.map((crumb, n) => (
-                    <motion.div
-                      key={n}
-                      className="absolute top-1/2 left-1/2 size-2 rounded-full bg-amber-200"
-                      initial={{ scale: 1, x: 0, y: 0, opacity: 1 }}
-                      animate={{ x: crumb.x, y: crumb.y, scale: 0, opacity: 0 }}
-                      transition={{ duration: CRUMB_DURATION, delay: n * CRUMB_STAGGER }}
-                    />
-                  ))}
-                </div>
-              )}
-
-              {theme === "mouse" ? (
-                <Cheese
-                  className="relative size-full drop-shadow-md"
-                  eaten={isCompleted}
-                  eatProgress={eatProgress}
-                  isBeingEaten={Boolean(isCurrent && isRunning)}
-                />
-              ) : (
-                <Cone
-                  className="relative size-full drop-shadow-md"
-                  passed={isCompleted}
-                  passProgress={eatProgress}
-                  isBeingPassed={Boolean(isCurrent && isRunning)}
-                />
-              )}
-            </div>
-          )
-        })}
-
-        <motion.div
-          className="relative flex aspect-square items-center justify-center"
-          animate={
-            completedIntervals >= totalIntervals && !reduceMotion
-              ? { scale: [1, 1.08, 1] }
-              : { scale: 1 }
-          }
-          transition={{ duration: 0.9, repeat: completedIntervals >= totalIntervals ? 2 : 0 }}
-        >
-          {theme === "mouse" ? (
-            <MouseHole
-              className="size-full drop-shadow-lg"
-              arrived={completedIntervals >= totalIntervals}
-            />
-          ) : (
-            <FinishFlag className="size-full drop-shadow-lg" />
-          )}
-        </motion.div>
-      </div>
-
-      {metrics.cell > 0 && (
-        <motion.div
-          className="pointer-events-none absolute z-10 flex items-center justify-center"
-          initial={false}
-          animate={{
-            left: charLeft,
-            top: charTop,
-            width: charSize,
-            height: charSize,
-            opacity: charOpacity,
+    <div
+      ref={boxRef}
+      role="img"
+      aria-label={`${completedIntervals} of ${totalIntervals} ${theme === "mouse" ? "cheese pieces eaten" : "cones passed"}`}
+      className="flex size-full min-h-0 items-center justify-center"
+    >
+      {cell > 0 && (
+        <div
+          className="grid"
+          style={{
+            gridTemplateColumns: `repeat(${cols}, ${cell}px)`,
+            gridAutoRows: `${cell}px`,
+            gap,
           }}
-          transition={
-            reduceMotion
-              ? { duration: 0 }
-              : goingHome
-                ? {
-                    left: { type: "spring", stiffness: TRAVEL_STIFFNESS, damping: 26 },
-                    top: { type: "spring", stiffness: TRAVEL_STIFFNESS, damping: 26 },
-                    width: { duration: 0.7 / ANIM_SPEED, delay: 0.12 / ANIM_SPEED, ease: "easeIn" },
-                    height: { duration: 0.7 / ANIM_SPEED, delay: 0.12 / ANIM_SPEED, ease: "easeIn" },
-                    opacity: { duration: 0.45 / ANIM_SPEED, delay: 0.28 / ANIM_SPEED, ease: "easeIn" },
-                  }
-                : { type: "spring", stiffness: TRAVEL_STIFFNESS, damping: 26 }
-          }
         >
+          {Array.from({ length: totalIntervals }, (_, i) => {
+            const isCompleted = i < completedIntervals
+            const isCurrent = i === completedIntervals && !arrived
+            const progress = isCurrent ? currentIntervalProgress : isCompleted ? 1 : 0
+
+            return (
+              <div key={`piece-${i}`} className="relative">
+                {i === completedIntervals - 1 && theme === "mouse" && !reduceMotion && (
+                  <div key={`crumbs-${completedIntervals}`} className="pointer-events-none absolute inset-0">
+                    {CRUMBS.map((crumb, n) => (
+                      <motion.div
+                        key={n}
+                        className="absolute top-1/2 left-1/2 size-[8%] rounded-full bg-accent"
+                        initial={{ scale: 1, x: 0, y: 0, opacity: 1 }}
+                        animate={{ x: crumb.x, y: crumb.y, scale: 0, opacity: 0 }}
+                        transition={{ duration: CRUMB_DURATION, delay: n * CRUMB_STAGGER }}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {theme === "mouse" ? (
+                  <Cheese
+                    className="size-full"
+                    eaten={isCompleted}
+                    eatProgress={progress}
+                    isBeingEaten={isCurrent && isRunning}
+                  />
+                ) : (
+                  <Cone
+                    className="size-full"
+                    passed={isCompleted}
+                    passProgress={progress}
+                    isBeingPassed={isCurrent && isRunning}
+                  />
+                )}
+
+                {characterIndex === i && character}
+              </div>
+            )
+          })}
+
           <motion.div
-            className="size-full"
-            animate={justAte && !reduceMotion && !goingHome ? { y: [0, -8, 0] } : { y: 0 }}
-            transition={{ duration: 0.48, type: "tween", ease: "easeOut" }}
+            className="relative"
+            animate={arrived && !reduceMotion ? { scale: [1, 1.08, 1] } : { scale: 1 }}
+            transition={{ duration: 0.9, repeat: arrived ? 2 : 0 }}
           >
             {theme === "mouse" ? (
-              <Mouse
-                className="size-full drop-shadow-xl"
-                isMoving={isMoving}
-                isEating={isEating}
-                playing={isRunning || goingHome}
-              />
+              <MouseHole className="size-full" arrived={arrived} />
             ) : (
-              <RaceCar
-                className="size-full drop-shadow-xl"
-                isMoving={isMoving || isEating}
-                playing={isRunning}
-              />
+              <FinishFlag className="size-full" />
             )}
+            {characterIndex === totalIntervals && character}
           </motion.div>
-        </motion.div>
+        </div>
       )}
-      </div>
     </div>
-  )
-}
-
-const CONFETTI_COLORS = ["#E53935", "#FFD93D", "#4CAF50", "#2196F3", "#FF6B00", "#9C27B0"] as const
-const CONFETTI_SHAPES = ["square", "circle", "triangle"] as const
-
-type ConfettiPiece = {
-  id: number
-  shape: (typeof CONFETTI_SHAPES)[number]
-  color: string
-  startX: number
-  drift: number
-  duration: number
-  delay: number
-  rotate: number
-  size: number
-}
-
-export function CelebrationOverlay({
-  theme,
-  onClose,
-}: {
-  theme: ThemeType
-  onClose: () => void
-}) {
-  const reduceMotion = useReducedMotion()
-  const isNarrow = useMediaQuery("(max-width: 480px)")
-  const confettiCount = reduceMotion ? 0 : isNarrow ? 48 : 90
-
-  const confetti = useMemo<ConfettiPiece[]>(
-    () =>
-      Array.from({ length: confettiCount }, (_, i) => ({
-        id: i,
-        shape: CONFETTI_SHAPES[i % CONFETTI_SHAPES.length] ?? "square",
-        color: CONFETTI_COLORS[i % CONFETTI_COLORS.length] ?? "#FFD93D",
-        startX: (i * 17) % 100,
-        drift: ((i * 13) % 24) - 12,
-        duration: 2.2 + (i % 5) * 0.15,
-        delay: (i % 8) * 0.05,
-        rotate: (i % 2 === 0 ? 1 : -1) * (420 + i * 12),
-        size: 8 + (i % 7),
-      })),
-    [confettiCount],
-  )
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-foreground/50"
-      onClick={onClose}
-    >
-      <ConfettiBurst pieceCount={96} />
-
-      <motion.div
-        className="pointer-events-none absolute inset-0"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: [0, 0.35, 0] }}
-        transition={{ duration: 1, type: "tween" }}
-        style={{
-          background:
-            theme === "mouse"
-              ? "radial-gradient(circle at center, rgba(255,217,61,0.45) 0%, transparent 70%)"
-              : "radial-gradient(circle at center, rgba(229,57,53,0.4) 0%, transparent 70%)",
-        }}
-      />
-
-      <motion.div
-        initial={{ scale: 0.7, y: 40, opacity: 0 }}
-        animate={{ scale: 1, y: 0, opacity: 1 }}
-        transition={{ type: "spring", duration: 0.7, bounce: 0.45 }}
-        className="relative z-10 mx-3 w-full max-w-sm rounded-[1.75rem] bg-card p-6 text-center shadow-xl ring-1 ring-black/5 sm:p-8"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <motion.div
-          animate={reduceMotion ? {} : { y: [0, -10, 0] }}
-          transition={{ type: "tween", duration: 0.8, repeat: reduceMotion ? 0 : 3, ease: "easeOut" }}
-          className="relative mx-auto mb-5 size-28 sm:size-32"
-        >
-          {theme === "mouse" ? (
-            <>
-              <Mouse className="size-full" />
-              <div className="absolute -top-1 -right-1 size-12">
-                <MouseHole className="size-full" arrived />
-              </div>
-            </>
-          ) : (
-            <>
-              <RaceCar className="size-full" />
-              <div className="absolute -top-1 -right-1 size-12">
-                <FinishFlag className="size-full" />
-              </div>
-            </>
-          )}
-        </motion.div>
-
-        <h2 className="mb-2 text-balance text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-          {theme === "mouse" ? "All done!" : "Winner!"}
-        </h2>
-        <p className="mb-6 text-pretty text-base text-muted-foreground">
-          {theme === "mouse"
-            ? "The mouse ate every piece and went home."
-            : "You crossed the finish line."}
-        </p>
-        <button
-          type="button"
-          data-testid="play-again"
-          onClick={onClose}
-          className="relative min-h-12 rounded-full bg-primary px-8 py-3 text-lg font-semibold text-primary-foreground shadow-lg ring-1 ring-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
-        >
-          Play Again
-        </button>
-      </motion.div>
-
-      {confetti.map((piece) => (
-        <motion.div
-          key={piece.id}
-          className={`pointer-events-none absolute ${
-            piece.shape === "circle" ? "rounded-full" : "rounded-sm"
-          }`}
-          style={{
-            width: piece.shape === "triangle" ? 0 : piece.size,
-            height: piece.shape === "triangle" ? 0 : piece.size,
-            backgroundColor: piece.shape === "triangle" ? "transparent" : piece.color,
-            borderLeft: piece.shape === "triangle" ? "6px solid transparent" : undefined,
-            borderRight: piece.shape === "triangle" ? "6px solid transparent" : undefined,
-            borderBottom: piece.shape === "triangle" ? `12px solid ${piece.color}` : undefined,
-            left: `${piece.startX}%`,
-          }}
-          initial={{ y: -24, rotate: 0, opacity: 1, scale: 0.4 }}
-          animate={{
-            y: "110vh",
-            x: piece.drift * 4,
-            rotate: piece.rotate,
-            opacity: [1, 1, 0],
-            scale: 1,
-          }}
-          transition={{
-            duration: piece.duration,
-            delay: piece.delay,
-            ease: "easeOut",
-          }}
-        />
-      ))}
-    </motion.div>
   )
 }

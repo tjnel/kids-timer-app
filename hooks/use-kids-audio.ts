@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useRef, useSyncExternalStore } from "react"
 
 const MUTE_STORAGE_KEY = "kidstimer-muted"
 
@@ -15,22 +15,43 @@ function createAudioContext(): AudioContext | null {
   return new Ctor()
 }
 
+// Mute preference lives in localStorage and is read through an external store
+// so the server render stays stable and the client picks up the saved value.
+const muteListeners = new Set<() => void>()
+
+function readMuted() {
+  try {
+    return window.localStorage.getItem(MUTE_STORAGE_KEY) === "1"
+  } catch {
+    return false
+  }
+}
+
+function writeMuted(next: boolean) {
+  try {
+    window.localStorage.setItem(MUTE_STORAGE_KEY, next ? "1" : "0")
+  } catch {
+    /* storage optional */
+  }
+  muteListeners.forEach((listener) => listener())
+}
+
+function subscribeMuted(listener: () => void) {
+  muteListeners.add(listener)
+  window.addEventListener("storage", listener)
+  return () => {
+    muteListeners.delete(listener)
+    window.removeEventListener("storage", listener)
+  }
+}
+
+function serverMuted() {
+  return false
+}
+
 export function useKidsAudio() {
   const ctxRef = useRef<AudioContext | null>(null)
-  const mutedRef = useRef(false)
-  const [muted, setMuted] = useState(false)
-
-  useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem(MUTE_STORAGE_KEY)
-      if (stored === "1") {
-        mutedRef.current = true
-        setMuted(true)
-      }
-    } catch {
-      /* storage optional */
-    }
-  }, [])
+  const muted = useSyncExternalStore(subscribeMuted, readMuted, serverMuted)
 
   const getContext = useCallback(() => {
     if (!ctxRef.current) {
@@ -44,21 +65,19 @@ export function useKidsAudio() {
   }, [])
 
   const toggleMuted = useCallback(() => {
-    const next = !mutedRef.current
-    mutedRef.current = next
-    setMuted(next)
-    try {
-      window.localStorage.setItem(MUTE_STORAGE_KEY, next ? "1" : "0")
-    } catch {
-      /* storage optional */
-    }
+    const next = !readMuted()
+    writeMuted(next)
     if (!next) getContext()
+  }, [getContext])
+
+  const audible = useCallback(() => {
+    if (readMuted()) return null
+    return getContext()
   }, [getContext])
 
   const playChomp = useCallback(
     (theme: "mouse" | "racecar") => {
-      if (mutedRef.current) return
-      const ctx = getContext()
+      const ctx = audible()
       if (!ctx) return
       const oscillator = ctx.createOscillator()
       const gain = ctx.createGain()
@@ -76,12 +95,11 @@ export function useKidsAudio() {
       oscillator.start(ctx.currentTime)
       oscillator.stop(ctx.currentTime + 0.15)
     },
-    [getContext],
+    [audible],
   )
 
   const playFanfare = useCallback(() => {
-    if (mutedRef.current) return
-    const ctx = getContext()
+    const ctx = audible()
     if (!ctx) return
     const playNote = (freq: number, startTime: number, duration: number) => {
       const oscillator = ctx.createOscillator()
@@ -100,12 +118,11 @@ export function useKidsAudio() {
     playNote(659.25, now + 0.15, 0.15)
     playNote(783.99, now + 0.3, 0.15)
     playNote(1046.5, now + 0.45, 0.4)
-  }, [getContext])
+  }, [audible])
 
   const playTick = useCallback(
     (theme: "mouse" | "racecar", remainingSeconds: number) => {
-      if (mutedRef.current) return
-      const ctx = getContext()
+      const ctx = audible()
       if (!ctx) return
 
       const urgent = remainingSeconds <= 5
@@ -120,10 +137,8 @@ export function useKidsAudio() {
       gain.connect(ctx.destination)
       oscillator.type = theme === "mouse" ? "triangle" : "square"
 
-      const high =
-        theme === "mouse" ? (tock ? 880 : 1174) : tock ? 220 : 330
-      const low =
-        theme === "mouse" ? (tock ? 660 : 784) : tock ? 165 : 247
+      const high = theme === "mouse" ? (tock ? 880 : 1174) : tock ? 220 : 330
+      const low = theme === "mouse" ? (tock ? 660 : 784) : tock ? 165 : 247
       oscillator.frequency.setValueAtTime(high, now)
       oscillator.frequency.exponentialRampToValueAtTime(low, now + duration)
 
@@ -146,7 +161,7 @@ export function useKidsAudio() {
         echo.stop(later + 0.06)
       }
     },
-    [getContext],
+    [audible],
   )
 
   return { getContext, playChomp, playFanfare, playTick, muted, toggleMuted }
