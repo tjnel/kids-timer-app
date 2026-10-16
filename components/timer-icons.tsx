@@ -1,7 +1,8 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import { motion, useReducedMotion } from "framer-motion"
+import { useSpriteStatus } from "@/hooks/use-sprite-status"
 import { CarSvg, CheeseSvg, ConeSvg, FlagSvg, MouseEatSvg, MouseHoleSvg, MouseIdleSvg, MouseRunSvg } from "./art"
 
 /** Slow preset: 0.55x of the original feel (fps x speed, duration / speed). */
@@ -20,20 +21,53 @@ const CONE_SETTLE_DURATION = 0.3 / ANIM_SPEED
 
 const STILL = "pointer-events-none select-none"
 
-/** Cycles 0..frameCount-1 at `fps` while `playing`; holds the last frame otherwise. */
-function useFrameCycle(frameCount: number, fps: number, playing: boolean) {
-  const [frame, setFrame] = useState(0)
+/** Horizontal sprite sheet. Shows the flat drawing until the PNG has loaded. */
+function Sprite({
+  src,
+  frameCount,
+  className = "",
+  frame,
+  playing = false,
+  fps = 8,
+  fallback,
+}: {
+  src: string
+  frameCount: number
+  className?: string
+  frame?: number
+  playing?: boolean
+  fps?: number
+  fallback: (frame: number) => ReactNode
+}) {
+  const status = useSpriteStatus(src)
+  const [cycled, setCycled] = useState(0)
 
   useEffect(() => {
-    if (!playing || frameCount <= 1) return
-    const id = window.setInterval(
-      () => setFrame((current) => (current + 1) % frameCount),
-      Math.max(50, Math.round(1000 / fps)),
-    )
+    if (typeof frame === "number" || !playing || frameCount <= 1) return
+    const id = window.setInterval(() => {
+      setCycled((next) => (next + 1) % frameCount)
+    }, Math.max(50, Math.round(1000 / fps)))
     return () => window.clearInterval(id)
-  }, [playing, frameCount, fps])
+  }, [frame, playing, frameCount, fps])
 
-  return frame % frameCount
+  const current = typeof frame === "number" ? frame : cycled
+  const safe = Math.max(0, Math.min(current, frameCount - 1))
+  if (status !== "ready") {
+    return <div className={`${className} ${STILL}`}>{fallback(safe)}</div>
+  }
+
+  const position = frameCount > 1 ? `${(safe / (frameCount - 1)) * 100}% 0%` : "center"
+  return (
+    <div
+      className={`${className} ${STILL}`}
+      style={{
+        backgroundImage: `url(${src})`,
+        backgroundRepeat: "no-repeat",
+        backgroundSize: `${frameCount * 100}% 100%`,
+        backgroundPosition: position,
+      }}
+    />
+  )
 }
 
 /** `playing` drives all motion; the static mouse is used in headers and pickers. */
@@ -49,8 +83,12 @@ export function Mouse({
   playing?: boolean
 }) {
   const reduceMotion = useReducedMotion()
-  const frame = useFrameCycle(4, isEating ? EAT_FPS : RUN_FPS, playing && (isEating || isMoving))
   const animating = playing && !reduceMotion
+  const sheet = isEating
+    ? { src: "/sprites/mouse-eat.png", frames: 4, fps: EAT_FPS }
+    : isMoving
+      ? { src: "/sprites/mouse-run.png", frames: 4, fps: RUN_FPS }
+      : { src: "/sprites/mouse-idle.png", frames: 1, fps: 1 }
 
   return (
     <motion.div
@@ -65,7 +103,16 @@ export function Mouse({
         ease: "easeInOut",
       }}
     >
-      {isEating ? <MouseEatSvg frame={frame} /> : isMoving ? <MouseRunSvg frame={frame} /> : <MouseIdleSvg />}
+      <Sprite
+        src={sheet.src}
+        frameCount={sheet.frames}
+        fps={sheet.fps}
+        playing={animating && (isEating || isMoving)}
+        className="size-full"
+        fallback={(frame) =>
+          isEating ? <MouseEatSvg frame={frame} /> : isMoving ? <MouseRunSvg frame={frame} /> : <MouseIdleSvg />
+        }
+      />
     </motion.div>
   )
 }
@@ -103,7 +150,13 @@ export function Cheese({
         ease: "easeInOut",
       }}
     >
-      <CheeseSvg frame={frame} />
+      <Sprite
+        src={eaten || isBeingEaten || eatProgress > 0 ? "/sprites/cheese-eat.png" : "/sprites/cheese-idle.png"}
+        frameCount={eaten || isBeingEaten || eatProgress > 0 ? 4 : 1}
+        frame={frame}
+        className="size-full"
+        fallback={(drawn) => <CheeseSvg frame={drawn} />}
+      />
     </motion.div>
   )
 }
@@ -117,8 +170,6 @@ export function RaceCar({
   isMoving?: boolean
   playing?: boolean
 }) {
-  const frame = useFrameCycle(3, DRIVE_FPS, playing && isMoving)
-
   return (
     <motion.div
       className={`${className} ${STILL}`}
@@ -126,17 +177,28 @@ export function RaceCar({
       animate={playing ? { x: [0, 2, 0, -1, 0], y: [0, -1, 0, -0.5, 0], rotate: [0, 0.4, 0, -0.2, 0] } : {}}
       transition={{ type: "tween", duration: CAR_DURATION, repeat: playing ? Infinity : 0, ease: "linear" }}
     >
-      <CarSvg driving={isMoving} frame={frame} />
+      <Sprite
+        src={isMoving ? "/sprites/car-drive.png" : "/sprites/car-idle.png"}
+        frameCount={isMoving ? 3 : 1}
+        fps={DRIVE_FPS}
+        playing={playing && isMoving}
+        className="size-full"
+        fallback={(frame) => <CarSvg driving={isMoving} frame={frame} />}
+      />
     </motion.div>
   )
 }
 
 export function FinishFlag({ className = "" }: { className?: string }) {
-  const frame = useFrameCycle(3, FLAG_FPS, true)
   return (
-    <div className={`${className} ${STILL}`} aria-hidden="true">
-      <FlagSvg frame={frame} />
-    </div>
+    <Sprite
+      src="/sprites/flag-wave.png"
+      frameCount={3}
+      fps={FLAG_FPS}
+      playing
+      className={className}
+      fallback={(frame) => <FlagSvg frame={frame} />}
+    />
   )
 }
 
