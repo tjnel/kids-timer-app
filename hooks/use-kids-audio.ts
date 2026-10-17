@@ -105,7 +105,7 @@ export function useKidsAudio() {
   useEffect(() => {
     const retry = () => {
       const ctx = ctxRef.current
-      if (!ctx || ctx.state !== "suspended") return
+      if (!ctx || ctx.state === "running" || ctx.state === "closed") return
       prime(ctx)
       void resumeSafely(ctx)
     }
