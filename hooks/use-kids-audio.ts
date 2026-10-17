@@ -85,14 +85,29 @@ function serverMuted() {
 
 export function useKidsAudio() {
   const ctxRef = useRef<AudioContext | null>(null)
+  const resumeRef = useRef<Promise<void> | null>(null)
   const muted = useSyncExternalStore(subscribeMuted, readMuted, serverMuted)
+
+  const resumeSafely = useCallback((ctx: AudioContext) => {
+    if (ctx.state === "running") return Promise.resolve()
+    if (resumeRef.current) return resumeRef.current
+    const pending = ctx.resume().then(
+      () => undefined,
+      () => undefined,
+    )
+    resumeRef.current = pending
+    void pending.finally(() => {
+      if (resumeRef.current === pending) resumeRef.current = null
+    })
+    return pending
+  }, [])
 
   useEffect(() => {
     const retry = () => {
       const ctx = ctxRef.current
       if (!ctx || ctx.state !== "suspended") return
       prime(ctx)
-      void ctx.resume()
+      void resumeSafely(ctx)
     }
     window.addEventListener("pointerdown", retry)
     window.addEventListener("touchend", retry)
@@ -101,19 +116,21 @@ export function useKidsAudio() {
       window.removeEventListener("touchend", retry)
       const ctx = ctxRef.current
       ctxRef.current = null
-      if (ctx && ctx.state !== "closed") void ctx.close()
+      resumeRef.current = null
+      if (ctx && ctx.state !== "closed") {
+        void ctx.close().then(
+          () => undefined,
+          () => undefined,
+        )
+      }
     }
-  }, [])
+  }, [resumeSafely])
 
   const getContext = useCallback(() => {
     if (!ctxRef.current || ctxRef.current.state === "closed") {
       ctxRef.current = createAudioContext()
     }
-    const ctx = ctxRef.current
-    if (ctx && ctx.state === "suspended") {
-      void ctx.resume()
-    }
-    return ctx
+    return ctxRef.current
   }, [])
 
   /** Call from a tap. Starts the resume and the silent buffer in that gesture. */
@@ -121,12 +138,8 @@ export function useKidsAudio() {
     const ctx = getContext()
     if (!ctx) return Promise.resolve()
     prime(ctx)
-    if (ctx.state === "running") return Promise.resolve()
-    return ctx.resume().then(
-      () => undefined,
-      () => undefined,
-    )
-  }, [getContext])
+    return resumeSafely(ctx)
+  }, [getContext, resumeSafely])
 
   const toggleMuted = useCallback(() => {
     const next = !readMuted()
