@@ -12,6 +12,7 @@ export function ResetButton({ onReset }: { onReset: () => void }) {
   const [holdProgress, setHoldProgress] = useState(0)
   const rafRef = useRef(0)
   const holdFiredRef = useRef(false)
+  const activePointerRef = useRef<number | null>(null)
 
   const cancelHold = useCallback(() => {
     window.cancelAnimationFrame(rafRef.current)
@@ -21,7 +22,8 @@ export function ResetButton({ onReset }: { onReset: () => void }) {
   useEffect(() => cancelHold, [cancelHold])
 
   const beginHold = (event: React.PointerEvent<HTMLButtonElement>) => {
-    if (event.button !== 0) return
+    if (event.button !== 0 || activePointerRef.current !== null) return
+    activePointerRef.current = event.pointerId
     holdFiredRef.current = false
     event.currentTarget.setPointerCapture(event.pointerId)
     const startedAt = performance.now()
@@ -40,7 +42,9 @@ export function ResetButton({ onReset }: { onReset: () => void }) {
     rafRef.current = window.requestAnimationFrame(step)
   }
 
-  const endPress = () => {
+  const endPress = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (event.pointerId !== activePointerRef.current) return
+    activePointerRef.current = null
     holdFiredRef.current = false
     cancelHold()
   }
@@ -57,8 +61,8 @@ export function ResetButton({ onReset }: { onReset: () => void }) {
         aria-label="Hold to reset"
         onPointerDown={beginHold}
         onPointerUp={endPress}
-        onPointerCancel={cancelHold}
-        onLostPointerCapture={cancelHold}
+        onPointerCancel={endPress}
+        onLostPointerCapture={endPress}
         onContextMenu={(event) => event.preventDefault()}
         onClick={handleClick}
         className="relative flex size-14 items-center justify-center rounded-full bg-card text-card-foreground shadow-[0_4px_0_rgba(46,26,8,0.28)] select-none touch-none focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-foreground-strong active:translate-y-0.5 active:shadow-[0_2px_0_rgba(46,26,8,0.28)] sm:size-16"

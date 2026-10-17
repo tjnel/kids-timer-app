@@ -23,6 +23,7 @@ export function PauseButton({ isRunning, onPause, onPlay, onPressStart }: PauseB
   const [holdProgress, setHoldProgress] = useState(0)
   const rafRef = useRef(0)
   const holdFiredRef = useRef(false)
+  const activePointerRef = useRef<number | null>(null)
 
   const cancelHold = useCallback(() => {
     window.cancelAnimationFrame(rafRef.current)
@@ -32,8 +33,10 @@ export function PauseButton({ isRunning, onPause, onPlay, onPressStart }: PauseB
   useEffect(() => cancelHold, [cancelHold, isRunning])
 
   const beginHold = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (event.button !== 0 || activePointerRef.current !== null) return
+    activePointerRef.current = event.pointerId
     onPressStart?.()
-    if (!isRunning || event.button !== 0) return
+    if (!isRunning) return
     holdFiredRef.current = false
     event.currentTarget.setPointerCapture(event.pointerId)
     const startedAt = performance.now()
@@ -53,11 +56,13 @@ export function PauseButton({ isRunning, onPause, onPlay, onPressStart }: PauseB
 
   // Pointer presses resolve here: a completed hold already paused, anything
   // else while paused resumes. Quick taps while running do nothing.
-  const endPress = () => {
+  const endPress = (event: React.PointerEvent<HTMLButtonElement>, resume: boolean) => {
+    if (event.pointerId !== activePointerRef.current) return
+    activePointerRef.current = null
     const fired = holdFiredRef.current
     holdFiredRef.current = false
     cancelHold()
-    if (!fired && !isRunning) onPlay()
+    if (resume && !fired && !isRunning) onPlay()
   }
 
   // Keyboard activation (detail 0) toggles; pointer clicks were handled above.
@@ -75,9 +80,9 @@ export function PauseButton({ isRunning, onPause, onPlay, onPressStart }: PauseB
         aria-label={isRunning ? "Hold to pause" : "Play"}
         aria-pressed={!isRunning}
         onPointerDown={beginHold}
-        onPointerUp={endPress}
-        onPointerCancel={cancelHold}
-        onLostPointerCapture={cancelHold}
+        onPointerUp={(event) => endPress(event, true)}
+        onPointerCancel={(event) => endPress(event, false)}
+        onLostPointerCapture={(event) => endPress(event, false)}
         onContextMenu={(event) => event.preventDefault()}
         onClick={handleClick}
         className="relative flex size-[4.5rem] items-center justify-center rounded-full bg-control text-control-foreground shadow-[0_6px_0_rgba(46,26,8,0.35)] select-none touch-none focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-foreground-strong active:translate-y-0.5 active:shadow-[0_4px_0_rgba(46,26,8,0.35)] sm:size-20 md:size-24"
