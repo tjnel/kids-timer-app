@@ -13,12 +13,12 @@ async function readRemaining(page: Page) {
  * Presses the pause control for `ms`. Touch projects drive a real touch
  * sequence through CDP so the long-press path (no trailing click) is exercised.
  */
-async function pressPause(page: Page, ms: number, hasTouch: boolean) {
-  const button = page.getByRole("button", { name: "Hold to pause" })
+async function pressNamed(page: Page, name: string, ms: number, hasTouch: boolean) {
+  const button = page.getByRole("button", { name })
   await expect(button).toBeVisible()
   const box = await button.boundingBox()
   if (!box) {
-    throw new Error("Pause button has no box")
+    throw new Error(`${name} button has no box`)
   }
   const x = box.x + box.width / 2
   const y = box.y + box.height / 2
@@ -34,6 +34,10 @@ async function pressPause(page: Page, ms: number, hasTouch: boolean) {
     await page.waitForTimeout(ms)
     await page.mouse.up()
   }
+}
+
+function pressPause(page: Page, ms: number, hasTouch: boolean) {
+  return pressNamed(page, "Hold to pause", ms, hasTouch)
 }
 
 async function activate(page: Page, name: string, hasTouch: boolean) {
@@ -151,8 +155,26 @@ test.describe("Kids mouse timer", () => {
     await startTimer(page)
     await expectNoHorizontalOverflow(page)
     await expect(page.getByRole("button", { name: "Hold to pause" })).toBeInViewport()
+    await expect(page.getByRole("button", { name: "Hold to reset" })).toBeInViewport()
     await expect(page.getByTestId("remaining-time")).toBeInViewport()
     await expect(page.getByRole("button", { name: "Back to setup" })).toBeInViewport()
+  })
+
+  test("holding reset restores the full time and stays on the run", async ({ page }, testInfo) => {
+    const hasTouch = Boolean(testInfo.project.use.hasTouch)
+    await page.goto("/?minutes=10")
+    await startTimer(page)
+    await page.waitForTimeout(1500)
+    expect(await readRemaining(page)).toBeLessThan(600)
+
+    await pressNamed(page, "Hold to reset", 400, hasTouch)
+    await page.waitForTimeout(200)
+    expect(await readRemaining(page)).toBeLessThan(600)
+
+    await pressNamed(page, "Hold to reset", 1700, hasTouch)
+    await expect(page.getByTestId("remaining-time")).toHaveText("10:00")
+    await expect(page.getByRole("button", { name: "Play" })).toBeVisible()
+    await expect(page.getByRole("button", { name: "Start timer" })).toHaveCount(0)
   })
 
   test("completing the timer then Play Again returns to a full setup", async ({ page }) => {

@@ -11,13 +11,15 @@ interface PauseButtonProps {
   isRunning: boolean
   onPause: () => void
   onPlay: () => void
+  /** Fires at the start of a tap so phones can unlock sound inside the gesture. */
+  onPressStart?: () => void
 }
 
 /**
  * One round control. While running a press must be held for HOLD_MS to pause
  * (little fingers tap everything); while paused a tap resumes. Keyboard toggles.
  */
-export function PauseButton({ isRunning, onPause, onPlay }: PauseButtonProps) {
+export function PauseButton({ isRunning, onPause, onPlay, onPressStart }: PauseButtonProps) {
   const [holdProgress, setHoldProgress] = useState(0)
   const rafRef = useRef(0)
   const holdFiredRef = useRef(false)
@@ -30,6 +32,7 @@ export function PauseButton({ isRunning, onPause, onPlay }: PauseButtonProps) {
   useEffect(() => cancelHold, [cancelHold, isRunning])
 
   const beginHold = (event: React.PointerEvent<HTMLButtonElement>) => {
+    onPressStart?.()
     if (!isRunning || event.button !== 0) return
     holdFiredRef.current = false
     event.currentTarget.setPointerCapture(event.pointerId)

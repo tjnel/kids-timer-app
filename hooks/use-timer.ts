@@ -131,6 +131,11 @@ export function useTimer({ initialMinutes, intervalType }: UseTimerOptions) {
     setPhase({ kind: "idle" })
   }, [])
 
+  /** Back to the full time, paused, without leaving the running screen. */
+  const restart = useCallback(() => {
+    setPhase({ kind: "paused", remaining: configuredTotal })
+  }, [configuredTotal])
+
   return {
     status: phase.kind,
     remainingSeconds: Math.max(0, Math.ceil(remaining)),
@@ -143,6 +148,7 @@ export function useTimer({ initialMinutes, intervalType }: UseTimerOptions) {
     start,
     pause,
     reset,
+    restart,
   }
 }
 

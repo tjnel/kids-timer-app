@@ -107,6 +107,7 @@ test.describe("Viewport sweep", () => {
       await page.waitForTimeout(400)
       await noHorizontalOverflow(page)
       await fullyInViewport(page, page.getByRole("button", { name: "Hold to pause" }), "pause")
+      await fullyInViewport(page, page.getByRole("button", { name: "Hold to reset" }), "reset")
       await fullyInViewport(page, page.getByRole("button", { name: "Back to setup" }), "back")
       await fullyInViewport(page, page.getByTestId("remaining-time"), "time")
       await fullyInViewport(page, page.getByTestId("goal"), "goal cell")

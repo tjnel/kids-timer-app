@@ -12,6 +12,7 @@ import { FlashOverlay } from "./flash-overlay"
 import { IconButton } from "./icon-button"
 import { IntervalToggle } from "./interval-toggle"
 import { PauseButton } from "./pause-button"
+import { ResetButton } from "./reset-button"
 import { THEMES, type ThemeType } from "./theme"
 import { ThemeSelector } from "./theme-selector"
 import { TimeSelector } from "./time-selector"
@@ -70,7 +71,8 @@ export function KidsTimer() {
   useTimerFeedback({ timer, theme, intervalType, audio, celebrating })
 
   const handleStart = () => {
-    audio.getContext()
+    // Resume has to begin inside the tap. Phones drop sounds scheduled before that.
+    void audio.unlock()
     timer.start()
   }
 
@@ -143,6 +145,7 @@ export function KidsTimer() {
                 type="button"
                 aria-label="Start timer"
                 whileTap={{ scale: 0.96 }}
+                onPointerDown={() => void audio.unlock()}
                 onClick={handleStart}
                 className="flex min-h-14 items-center gap-2 rounded-full bg-primary py-3 pr-6 pl-8 text-xl font-extrabold text-primary-foreground shadow-[0_5px_0_rgba(46,26,8,0.3)] focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-foreground-strong md:min-h-16 md:text-2xl short:min-h-12 short:py-2"
               >
@@ -161,22 +164,26 @@ export function KidsTimer() {
             className="flex min-h-0 flex-1 flex-col"
           >
             <h1 className="sr-only">{spec.title}</h1>
-            <header className="flex shrink-0 items-center justify-between px-3 py-2 sm:px-5 sm:py-3 short:py-1">
+            <header className="flex shrink-0 items-center px-3 py-2 sm:px-5 sm:py-3 short:py-1">
               <div className="flex items-center gap-1">
                 <IconButton label="Back to setup" onClick={timer.reset}>
                   <ArrowLeft className="size-7" strokeWidth={2.75} />
                 </IconButton>
                 {muteButton}
               </div>
-              <p className="pr-2 text-3xl font-extrabold tracking-tight tabular-nums sm:text-4xl md:text-5xl short:text-3xl">
+            </header>
+
+            {/*
+              The clock leads on a tall screen. On a short landscape phone it sits
+              in the side column so the grid keeps the height.
+            */}
+            <div className="flex min-h-0 flex-1 flex-col short:flex-row">
+              <p className="shrink-0 py-1 text-center text-6xl leading-none font-extrabold tracking-tight text-foreground-strong tabular-nums sm:text-7xl md:text-8xl short:order-2 short:self-center short:px-2 short:py-0 short:text-5xl">
                 <span className="sr-only">Time left </span>
                 <span data-testid="remaining-time">{formatClock(timer.remainingSeconds)}</span>
               </p>
-            </header>
 
-            {/* The pause control sits under the grid, or beside it when the screen is short. */}
-            <div className="flex min-h-0 flex-1 flex-col short:flex-row">
-              <main className="min-h-0 flex-1 px-3 py-1 sm:px-8 short:px-4 short:py-2">
+              <main className="min-h-0 flex-1 px-3 py-1 sm:px-8 short:order-1 short:px-4 short:py-2">
                 <TimerGrid
                   totalIntervals={timer.totalIntervals}
                   completedIntervals={timer.completedIntervals}
@@ -186,8 +193,14 @@ export function KidsTimer() {
                 />
               </main>
 
-              <footer className="flex shrink-0 justify-center pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] short:items-center short:px-6 short:pt-0 short:pb-0">
-                <PauseButton isRunning={timer.isRunning} onPause={timer.pause} onPlay={timer.start} />
+              <footer className="flex shrink-0 items-end justify-center gap-5 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] short:order-3 short:flex-col short:items-center short:gap-2 short:px-4 short:pt-0 short:pb-0">
+                <PauseButton
+                  isRunning={timer.isRunning}
+                  onPause={timer.pause}
+                  onPlay={handleStart}
+                  onPressStart={() => void audio.unlock()}
+                />
+                <ResetButton onReset={timer.restart} />
               </footer>
             </div>
           </motion.div>
