@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useRef, useSyncExternalStore } from "react"
+import { useCallback, useEffect, useRef, useSyncExternalStore } from "react"
 import { THEMES, type ThemeType } from "@/components/theme"
 
 const MUTE_STORAGE_KEY = "kidstimer-muted"
@@ -85,24 +85,29 @@ function serverMuted() {
 
 export function useKidsAudio() {
   const ctxRef = useRef<AudioContext | null>(null)
-  const gestureRef = useRef(false)
   const muted = useSyncExternalStore(subscribeMuted, readMuted, serverMuted)
 
+  useEffect(() => {
+    const retry = () => {
+      const ctx = ctxRef.current
+      if (!ctx || ctx.state !== "suspended") return
+      prime(ctx)
+      void ctx.resume()
+    }
+    window.addEventListener("pointerdown", retry)
+    window.addEventListener("touchend", retry)
+    return () => {
+      window.removeEventListener("pointerdown", retry)
+      window.removeEventListener("touchend", retry)
+      const ctx = ctxRef.current
+      ctxRef.current = null
+      if (ctx && ctx.state !== "closed") void ctx.close()
+    }
+  }, [])
+
   const getContext = useCallback(() => {
-    if (!ctxRef.current) {
+    if (!ctxRef.current || ctxRef.current.state === "closed") {
       ctxRef.current = createAudioContext()
-      const created = ctxRef.current
-      if (created && !gestureRef.current) {
-        gestureRef.current = true
-        // A later tap (pause, play, unmute) has to resume a context the phone suspended.
-        const retry = () => {
-          if (created.state !== "suspended") return
-          prime(created)
-          void created.resume()
-        }
-        window.addEventListener("pointerdown", retry)
-        window.addEventListener("touchend", retry)
-      }
     }
     const ctx = ctxRef.current
     if (ctx && ctx.state === "suspended") {
@@ -129,101 +134,92 @@ export function useKidsAudio() {
     if (!next) void unlock()
   }, [unlock])
 
-  const ensureRunning = useCallback(async () => {
+  // Play only on a context that is already running. Waiting on resume would
+  // queue a tick per second and burst them all when the phone finally allows it.
+  const runningContext = useCallback(() => {
     if (readMuted()) return null
     const ctx = getContext()
-    if (!ctx) return null
-    if (ctx.state !== "running") {
-      try {
-        await ctx.resume()
-      } catch {
-        return null
-      }
-    }
-    return ctx.state === "running" ? ctx : null
+    if (!ctx || ctx.state !== "running") return null
+    return ctx
   }, [getContext])
 
   const playChomp = useCallback(
     (theme: ThemeType) => {
-      void ensureRunning().then((ctx) => {
-        if (!ctx) return
-        try {
-          const { from, to } = THEMES[theme].chomp
-          const { osc, gain } = voice(ctx, "sine")
-          const now = ctx.currentTime
-          osc.frequency.setValueAtTime(from, now)
-          osc.frequency.exponentialRampToValueAtTime(to, now + 0.1)
-          gain.gain.setValueAtTime(0.22, now)
-          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15)
-          osc.start(now)
-          osc.stop(now + 0.15)
-        } catch {
-          /* a phone can reject a ramp; the timer still runs */
-        }
-      })
-    },
-    [ensureRunning],
-  )
-
-  const playFanfare = useCallback(() => {
-    void ensureRunning().then((ctx) => {
+      const ctx = runningContext()
       if (!ctx) return
       try {
-        const playNote = (freq: number, startTime: number, duration: number) => {
-          const { osc, gain } = voice(ctx, "triangle")
-          osc.frequency.value = freq
-          gain.gain.setValueAtTime(0.24, startTime)
-          gain.gain.exponentialRampToValueAtTime(0.01, startTime + duration)
-          osc.start(startTime)
-          osc.stop(startTime + duration)
-        }
+        const { from, to } = THEMES[theme].chomp
+        const { osc, gain } = voice(ctx, "sine")
         const now = ctx.currentTime
-        playNote(523.25, now, 0.15)
-        playNote(659.25, now + 0.15, 0.15)
-        playNote(783.99, now + 0.3, 0.15)
-        playNote(1046.5, now + 0.45, 0.4)
+        osc.frequency.setValueAtTime(from, now)
+        osc.frequency.exponentialRampToValueAtTime(to, now + 0.1)
+        gain.gain.setValueAtTime(0.18, now)
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15)
+        osc.start(now)
+        osc.stop(now + 0.15)
       } catch {
         /* a phone can reject a ramp; the timer still runs */
       }
-    })
-  }, [ensureRunning])
+    },
+    [runningContext],
+  )
+
+  const playFanfare = useCallback(() => {
+    const ctx = runningContext()
+    if (!ctx) return
+    try {
+      const playNote = (freq: number, startTime: number, duration: number) => {
+        const { osc, gain } = voice(ctx, "triangle")
+        osc.frequency.value = freq
+        gain.gain.setValueAtTime(0.2, startTime)
+        gain.gain.exponentialRampToValueAtTime(0.01, startTime + duration)
+        osc.start(startTime)
+        osc.stop(startTime + duration)
+      }
+      const now = ctx.currentTime
+      playNote(523.25, now, 0.15)
+      playNote(659.25, now + 0.15, 0.15)
+      playNote(783.99, now + 0.3, 0.15)
+      playNote(1046.5, now + 0.45, 0.4)
+    } catch {
+      /* a phone can reject a ramp; the timer still runs */
+    }
+  }, [runningContext])
 
   const playTick = useCallback(
     (theme: ThemeType, remainingSeconds: number) => {
-      void ensureRunning().then((ctx) => {
-        if (!ctx) return
-        try {
-          const spec = THEMES[theme].tick
-          const urgent = remainingSeconds <= 5
-          const beat = remainingSeconds % 2 === 0 ? "tock" : "tick"
-          const now = ctx.currentTime
-          const duration = urgent ? 0.09 : 0.055
-          const peak = urgent ? 0.2 : 0.14
+      const ctx = runningContext()
+      if (!ctx) return
+      try {
+        const spec = THEMES[theme].tick
+        const urgent = remainingSeconds <= 5
+        const beat = remainingSeconds % 2 === 0 ? "tock" : "tick"
+        const now = ctx.currentTime
+        const duration = urgent ? 0.09 : 0.055
+        const peak = urgent ? 0.16 : 0.12
+        const { osc, gain } = voice(ctx, spec.wave)
+        osc.frequency.setValueAtTime(spec.high[beat], now)
+        osc.frequency.exponentialRampToValueAtTime(spec.low[beat], now + duration)
+        gain.gain.setValueAtTime(peak, now)
+        gain.gain.exponentialRampToValueAtTime(0.008, now + duration)
+        osc.start(now)
+        osc.stop(now + duration)
 
-          const { osc, gain } = voice(ctx, spec.wave)
-          osc.frequency.setValueAtTime(spec.high[beat], now)
-          osc.frequency.exponentialRampToValueAtTime(spec.low[beat], now + duration)
-          gain.gain.setValueAtTime(peak, now)
-          gain.gain.exponentialRampToValueAtTime(0.008, now + duration)
-          osc.start(now)
-          osc.stop(now + duration)
-
-          if (urgent) {
-            // Same voice, 1.5x the pitch, 120 ms later.
-            const echo = voice(ctx, spec.wave)
-            const later = now + 0.12
-            echo.osc.frequency.value = spec.high[beat] * 1.5
-            echo.gain.gain.setValueAtTime(peak * 0.7, later)
-            echo.gain.gain.exponentialRampToValueAtTime(0.008, later + 0.06)
-            echo.osc.start(later)
-            echo.osc.stop(later + 0.06)
-          }
-        } catch {
-          /* a phone can reject a ramp; the timer still runs */
+        if (urgent) {
+          // Same voice, 1.5x the pitch, 120 ms later.
+          const echo = voice(ctx, spec.wave)
+          const later = now + 0.12
+          echo.osc.frequency.value = spec.high[beat] * 1.5
+          echo.gain.gain.setValueAtTime(peak * 0.7, later)
+          echo.gain.gain.exponentialRampToValueAtTime(0.008, later + 0.06)
+          echo.osc.start(later)
+          echo.osc.stop(later + 0.06)
         }
-      })
+      } catch {
+        /* a phone can reject a ramp; the timer still runs */
+      }
     },
-    [ensureRunning],
+    [runningContext],
   )
 
   return { getContext, unlock, playChomp, playFanfare, playTick, muted, toggleMuted }

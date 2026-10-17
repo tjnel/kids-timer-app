@@ -63,6 +63,7 @@ export function PauseButton({ isRunning, onPause, onPlay, onPressStart }: PauseB
   // Keyboard activation (detail 0) toggles; pointer clicks were handled above.
   const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     if (event.detail !== 0) return
+    onPressStart?.()
     if (isRunning) onPause()
     else onPlay()
   }

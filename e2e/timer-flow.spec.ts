@@ -171,7 +171,7 @@ test.describe("Kids mouse timer", () => {
     await page.waitForTimeout(200)
     expect(await readRemaining(page)).toBeLessThan(600)
 
-    await pressNamed(page, "Hold to reset", 1700, hasTouch)
+    await pressNamed(page, "Hold to reset", 2200, hasTouch)
     await expect(page.getByTestId("remaining-time")).toHaveText("10:00")
     await expect(page.getByRole("button", { name: "Play" })).toBeVisible()
     await expect(page.getByRole("button", { name: "Start timer" })).toHaveCount(0)

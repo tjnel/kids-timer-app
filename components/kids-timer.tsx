@@ -70,9 +70,9 @@ export function KidsTimer() {
   useWakeLock(timer.isRunning)
   useTimerFeedback({ timer, theme, intervalType, audio, celebrating })
 
-  const handleStart = () => {
-    // Resume has to begin inside the tap. Phones drop sounds scheduled before that.
-    void audio.unlock()
+  const handleStart = (event: React.MouseEvent<HTMLButtonElement>) => {
+    // Pointer taps already unlocked on pointerdown. A keyboard click did not.
+    if (event.detail === 0) void audio.unlock()
     timer.start()
   }
 
@@ -197,7 +197,7 @@ export function KidsTimer() {
                 <PauseButton
                   isRunning={timer.isRunning}
                   onPause={timer.pause}
-                  onPlay={handleStart}
+                  onPlay={timer.start}
                   onPressStart={() => void audio.unlock()}
                 />
                 <ResetButton onReset={timer.restart} />
