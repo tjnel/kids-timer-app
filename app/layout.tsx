@@ -1,13 +1,14 @@
 import type { Metadata, Viewport } from 'next'
-import { Nunito } from 'next/font/google'
+import localFont from 'next/font/local'
 import { Analytics } from '@vercel/analytics/next'
 import { ServiceWorkerRegister } from '@/components/service-worker-register'
 import './globals.css'
 
-const nunito = Nunito({
-  subsets: ['latin'],
+const nunito = localFont({
+  src: './fonts/nunito-latin.woff2',
   variable: '--font-nunito',
-  weight: ['400', '600', '700', '800'],
+  weight: '400 800',
+  display: 'swap',
 })
 
 export const metadata: Metadata = {
