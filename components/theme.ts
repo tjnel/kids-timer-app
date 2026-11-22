@@ -5,6 +5,8 @@ export interface ThemeSpec {
   hint: string
   doneTitle: string
   doneBody: string
+  /** What one grid piece is called under the clock: "4 pieces", "4 cones". */
+  unit: { singular: string; plural: string }
   /** Accessible grid status: "<n> of <total> <piece>" */
   piece: { singular: string; plural: string }
   /** Full-screen glow when a piece is finished. */
@@ -21,6 +23,7 @@ export const THEMES: Record<ThemeType, ThemeSpec> = {
     hint: "The mouse eats cheese, then runs home.",
     doneTitle: "All done!",
     doneBody: "The mouse ate every piece and went home.",
+    unit: { singular: "piece", plural: "pieces" },
     piece: { singular: "cheese piece eaten", plural: "cheese pieces eaten" },
     flash: "radial-gradient(circle at center, rgba(244,185,28,0.55) 0%, transparent 70%)",
     place: { left: -0.06, bottom: -0.04, size: 0.6 },
@@ -29,9 +32,10 @@ export const THEMES: Record<ThemeType, ThemeSpec> = {
   },
   racecar: {
     title: "Race Timer",
-    hint: "The car passes a cone each interval.",
+    hint: "The car zooms past cones to the finish.",
     doneTitle: "Winner!",
     doneBody: "You crossed the finish line.",
+    unit: { singular: "cone", plural: "cones" },
     piece: { singular: "cone passed", plural: "cones passed" },
     flash: "radial-gradient(circle at center, rgba(255,107,0,0.45) 0%, transparent 70%)",
     place: { left: 0.08, bottom: 0.08, size: 0.84 },

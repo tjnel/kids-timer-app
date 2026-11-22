@@ -1,13 +1,13 @@
 "use client"
 
-import { AnimatePresence, motion } from "framer-motion"
+import { AnimatePresence, m } from "framer-motion"
 
 /** A brief full-screen glow; remount by changing `flashKey` to play it again. */
 export function FlashOverlay({ active, flashKey, gradient }: { active: boolean; flashKey: number; gradient: string }) {
   return (
     <AnimatePresence>
       {active && (
-        <motion.div
+        <m.div
           key={flashKey}
           initial={{ opacity: 0 }}
           animate={{ opacity: [0, 0.3, 0] }}

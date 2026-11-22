@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, type ReactNode } from "react"
-import { motion, useReducedMotion } from "framer-motion"
+import { m, useReducedMotion } from "framer-motion"
 import { useSpriteStatus } from "@/hooks/use-sprite-status"
 import { CarSvg, CheeseSvg, ConeSvg, FlagSvg, MouseEatSvg, MouseHoleSvg, MouseIdleSvg, MouseRunSvg } from "./art"
 
@@ -21,7 +21,17 @@ const CONE_SETTLE_DURATION = 0.3 / ANIM_SPEED
 
 const STILL = "pointer-events-none select-none"
 
-/** Horizontal sprite sheet. Shows the flat drawing until the PNG has loaded. */
+/** The car is drawn 160x96, every other sheet uses square frames. */
+const CAR_FRAME_ASPECT = 160 / 96
+
+/**
+ * Horizontal sprite sheet. The PNG is painted straight away; the flat drawing
+ * only stands in if the sheet fails to load.
+ *
+ * `frameAspect` (width / height of one frame) keeps a non-square frame from
+ * being stretched to its box: the frame is fitted inside and sits on the
+ * bottom edge. Square frames fill their box.
+ */
 function Sprite({
   src,
   frameCount,
@@ -29,6 +39,7 @@ function Sprite({
   frame,
   playing = false,
   fps = 8,
+  frameAspect,
   fallback,
 }: {
   src: string
@@ -37,6 +48,7 @@ function Sprite({
   frame?: number
   playing?: boolean
   fps?: number
+  frameAspect?: number
   fallback: (frame: number) => ReactNode
 }) {
   const status = useSpriteStatus(src)
@@ -52,21 +64,36 @@ function Sprite({
 
   const current = typeof frame === "number" ? frame : cycled
   const safe = Math.max(0, Math.min(current, frameCount - 1))
-  if (status !== "ready") {
-    return <div className={`${className} ${STILL}`}>{fallback(safe)}</div>
-  }
-
-  const position = frameCount > 1 ? `${(safe / (frameCount - 1)) * 100}% 0%` : "center"
-  return (
-    <div
-      className={`${className} ${STILL}`}
-      style={{
+  const failed = status === "error"
+  const sheet = failed
+    ? undefined
+    : {
         backgroundImage: `url(${src})`,
         backgroundRepeat: "no-repeat",
         backgroundSize: `${frameCount * 100}% 100%`,
-        backgroundPosition: position,
-      }}
-    />
+        backgroundPosition: frameCount > 1 ? `${(safe / (frameCount - 1)) * 100}% 0%` : "center",
+      }
+
+  if (frameAspect === undefined) {
+    return (
+      <div className={`${className} ${STILL}`} style={sheet}>
+        {failed && fallback(safe)}
+      </div>
+    )
+  }
+
+  return (
+    <div className={`${className} ${STILL} flex items-end justify-center`} style={{ containerType: "size" }}>
+      <div
+        style={{
+          width: `min(100cqw, ${frameAspect * 100}cqh)`,
+          height: `min(100cqh, ${100 / frameAspect}cqw)`,
+          ...sheet,
+        }}
+      >
+        {failed && fallback(safe)}
+      </div>
+    </div>
   )
 }
 
@@ -91,7 +118,7 @@ export function Mouse({
       : { src: "/sprites/mouse-idle.png", frames: 1, fps: 1 }
 
   return (
-    <motion.div
+    <m.div
       className={`${className} ${STILL}`}
       aria-hidden="true"
       animate={!animating ? {} : isEating ? { rotate: [0, 4, 0, -3, 0], y: [0, 1, 0, 1, 0] } : { y: [0, -3, 0] }}
@@ -113,7 +140,7 @@ export function Mouse({
           isEating ? <MouseEatSvg frame={frame} /> : isMoving ? <MouseRunSvg frame={frame} /> : <MouseIdleSvg />
         }
       />
-    </motion.div>
+    </m.div>
   )
 }
 
@@ -132,7 +159,7 @@ export function Cheese({
   const frame = eaten ? 3 : Math.min(3, Math.max(0, Math.floor(eatProgress * 4)))
 
   return (
-    <motion.div
+    <m.div
       className={`${className} ${STILL}`}
       aria-hidden="true"
       animate={
@@ -157,7 +184,7 @@ export function Cheese({
         className="size-full"
         fallback={(drawn) => <CheeseSvg frame={drawn} />}
       />
-    </motion.div>
+    </m.div>
   )
 }
 
@@ -170,32 +197,36 @@ export function RaceCar({
   isMoving?: boolean
   playing?: boolean
 }) {
+  const reduceMotion = useReducedMotion()
+  const animating = playing && !reduceMotion
   return (
-    <motion.div
+    <m.div
       className={`${className} ${STILL}`}
       aria-hidden="true"
-      animate={playing ? { x: [0, 2, 0, -1, 0], y: [0, -1, 0, -0.5, 0], rotate: [0, 0.4, 0, -0.2, 0] } : {}}
-      transition={{ type: "tween", duration: CAR_DURATION, repeat: playing ? Infinity : 0, ease: "linear" }}
+      animate={animating ? { x: [0, 2, 0, -1, 0], y: [0, -1, 0, -0.5, 0], rotate: [0, 0.4, 0, -0.2, 0] } : {}}
+      transition={{ type: "tween", duration: CAR_DURATION, repeat: animating ? Infinity : 0, ease: "linear" }}
     >
       <Sprite
         src={isMoving ? "/sprites/car-drive.png" : "/sprites/car-idle.png"}
         frameCount={isMoving ? 3 : 1}
         fps={DRIVE_FPS}
-        playing={playing && isMoving}
+        playing={animating && isMoving}
+        frameAspect={CAR_FRAME_ASPECT}
         className="size-full"
         fallback={(frame) => <CarSvg driving={isMoving} frame={frame} />}
       />
-    </motion.div>
+    </m.div>
   )
 }
 
 export function FinishFlag({ className = "" }: { className?: string }) {
+  const reduceMotion = useReducedMotion()
   return (
     <Sprite
       src="/sprites/flag-wave.png"
       frameCount={3}
       fps={FLAG_FPS}
-      playing
+      playing={!reduceMotion}
       className={className}
       fallback={(frame) => <FlagSvg frame={frame} />}
     />
@@ -205,7 +236,7 @@ export function FinishFlag({ className = "" }: { className?: string }) {
 export function MouseHole({ className = "", arrived = false }: { className?: string; arrived?: boolean }) {
   const reduceMotion = useReducedMotion()
   return (
-    <motion.div
+    <m.div
       className={`${className} ${STILL}`}
       aria-hidden="true"
       animate={reduceMotion ? { scale: 1 } : arrived ? { scale: [1, 1.08, 1] } : { scale: [1, 1.05, 1] }}
@@ -217,7 +248,7 @@ export function MouseHole({ className = "", arrived = false }: { className?: str
       }}
     >
       <MouseHoleSvg arrived={arrived} />
-    </motion.div>
+    </m.div>
   )
 }
 
@@ -236,7 +267,7 @@ export function Cone({
   const wobble = passProgress * 8
 
   return (
-    <motion.div
+    <m.div
       className={`${className} ${STILL}`}
       aria-hidden="true"
       animate={
@@ -255,6 +286,6 @@ export function Cone({
       }
     >
       <ConeSvg knocked={passed} progress={passProgress} />
-    </motion.div>
+    </m.div>
   )
 }

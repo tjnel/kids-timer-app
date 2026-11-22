@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo } from "react"
-import { motion, useReducedMotion } from "framer-motion"
+import { m, useReducedMotion } from "framer-motion"
 
 const COLORS = ["#E53935", "#FFD93D", "#4CAF50", "#2196F3", "#FF6B00", "#9C27B0", "#FF8FAB", "#7C4DFF"] as const
 const SHAPES = ["square", "circle", "triangle"] as const
@@ -50,7 +50,7 @@ export function ConfettiBurst({ pieceCount = 80 }: { pieceCount?: number }) {
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
       {pieces.map((piece) => (
-        <motion.div
+        <m.div
           key={piece.id}
           className={`absolute ${piece.shape === "circle" ? "rounded-full" : "rounded-sm"}`}
           style={{

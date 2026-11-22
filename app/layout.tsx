@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import localFont from 'next/font/local'
 import { Analytics } from '@vercel/analytics/next'
 import { ServiceWorkerRegister } from '@/components/service-worker-register'
+import { SHARE_IMAGE, SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, SITE_URL } from '@/lib/site'
 import './globals.css'
 
 const nunito = localFont({
@@ -12,13 +13,29 @@ const nunito = localFont({
 })
 
 export const metadata: Metadata = {
-  title: 'Kids Timer',
-  description: 'A fun visual timer for kids with mouse and race car themes',
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: SITE_TITLE,
+    template: `%s | ${SITE_NAME}`,
+  },
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
+  category: 'education',
+  keywords: [
+    'kids timer',
+    'visual timer for kids',
+    'countdown timer for kids',
+    'toddler timer',
+    'visual countdown timer',
+    'classroom timer',
+    'tidy up timer',
+    'tooth brushing timer',
+  ],
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Kids Timer',
+    title: SITE_NAME,
   },
   icons: {
     icon: [
@@ -27,6 +44,21 @@ export const metadata: Metadata = {
       { url: '/icon-512.png', sizes: '512x512', type: 'image/png' },
     ],
     apple: '/apple-icon.png',
+  },
+  openGraph: {
+    type: 'website',
+    url: '/',
+    siteName: SITE_NAME,
+    locale: 'en_US',
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    images: [SHARE_IMAGE],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    images: [SHARE_IMAGE],
   },
 }
 

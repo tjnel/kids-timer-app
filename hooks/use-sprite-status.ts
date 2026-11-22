@@ -30,6 +30,11 @@ function loadSprite(src: string) {
   img.src = src
 }
 
+/** Starts fetching sheets ahead of the moment they are first shown. */
+export function preloadSprites(sources: readonly string[]) {
+  for (const src of sources) loadSprite(src)
+}
+
 export function useSpriteStatus(src: string): SpriteStatus {
   return useSyncExternalStore(
     (onStoreChange) => {
