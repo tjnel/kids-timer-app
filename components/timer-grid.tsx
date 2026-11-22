@@ -1,9 +1,10 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
-import { motion, useReducedMotion } from "framer-motion"
+import { useLayoutEffect, useRef, useState } from "react"
+import { m, useReducedMotion } from "framer-motion"
 import { THEMES, type ThemeType } from "./theme"
-import { ANIM_SPEED, Cheese, Cone, FinishFlag, Mouse, MouseHole, RaceCar } from "./timer-icons"
+import { THEME_ART } from "./theme-art"
+import { ANIM_SPEED } from "./timer-icons"
 
 interface TimerGridProps {
   totalIntervals: number
@@ -57,9 +58,13 @@ export function TimerGrid({
   const boxRef = useRef<HTMLDivElement>(null)
   const [box, setBox] = useState({ width: 0, height: 0 })
 
-  useEffect(() => {
+  // Measured before the first paint so the grid is there from the start; the
+  // observer then follows rotation and resizes.
+  useLayoutEffect(() => {
     const el = boxRef.current
     if (!el) return
+    const rect = el.getBoundingClientRect()
+    setBox({ width: rect.width, height: rect.height })
     const observer = new ResizeObserver((entries) => {
       const rect = entries[0]?.contentRect
       if (rect) setBox({ width: rect.width, height: rect.height })
@@ -81,13 +86,14 @@ export function TimerGrid({
   // known cell geometry, so moving to the next cell is a plain x/y animation.
   const pitch = cell + gap
   const { place, piece } = THEMES[theme]
+  const { Runner, Piece, Goal } = THEME_ART[theme]
   const characterSize = cell * place.size
   const characterX = (characterIndex % cols) * pitch + place.left * cell + (arrived ? 0.3 * cell : 0)
   const characterY =
     Math.floor(characterIndex / cols) * pitch + cell - characterSize - place.bottom * cell - (arrived ? 0.1 * cell : 0)
 
   const character = (
-    <motion.div
+    <m.div
       data-testid="runner"
       className="pointer-events-none absolute top-0 left-0 z-10"
       style={{ width: characterSize, height: characterSize }}
@@ -103,19 +109,15 @@ export function TimerGrid({
             }
       }
     >
-      <motion.div
+      <m.div
         key={completedIntervals}
         className="size-full"
         animate={completedIntervals > 0 && !arrived && !reduceMotion ? { y: [0, -8, 0] } : { y: 0 }}
         transition={{ duration: 0.48, type: "tween", ease: "easeOut" }}
       >
-        {theme === "mouse" ? (
-          <Mouse className="size-full" isMoving={isMoving} isEating={isEating} playing={isRunning || arrived} />
-        ) : (
-          <RaceCar className="size-full" isMoving={isMoving || isEating} playing={isRunning} />
-        )}
-      </motion.div>
-    </motion.div>
+        <Runner className="size-full" isMoving={isMoving} isBusy={isEating} isRunning={isRunning} arrived={arrived} />
+      </m.div>
+    </m.div>
   )
 
   return (
@@ -144,7 +146,7 @@ export function TimerGrid({
                 {i === completedIntervals - 1 && theme === "mouse" && !reduceMotion && (
                   <div key={`crumbs-${completedIntervals}`} className="pointer-events-none absolute inset-0">
                     {CRUMBS.map((crumb, n) => (
-                      <motion.div
+                      <m.div
                         key={n}
                         className="absolute top-1/2 left-1/2 size-[8%] rounded-full bg-accent"
                         initial={{ scale: 1, x: 0, y: 0, opacity: 1 }}
@@ -155,37 +157,19 @@ export function TimerGrid({
                   </div>
                 )}
 
-                {theme === "mouse" ? (
-                  <Cheese
-                    className="size-full"
-                    eaten={isCompleted}
-                    eatProgress={progress}
-                    isBeingEaten={isCurrent && isRunning}
-                  />
-                ) : (
-                  <Cone
-                    className="size-full"
-                    passed={isCompleted}
-                    passProgress={progress}
-                    isBeingPassed={isCurrent && isRunning}
-                  />
-                )}
+                <Piece className="size-full" done={isCompleted} progress={progress} active={isCurrent && isRunning} />
               </div>
             )
           })}
 
-          <motion.div
+          <m.div
             data-testid="goal"
             className="relative"
             animate={arrived && !reduceMotion ? { scale: [1, 1.08, 1] } : { scale: 1 }}
             transition={{ duration: 0.9, repeat: arrived ? 2 : 0 }}
           >
-            {theme === "mouse" ? (
-              <MouseHole className="size-full" arrived={arrived} />
-            ) : (
-              <FinishFlag className="size-full" />
-            )}
-          </motion.div>
+            <Goal className="size-full" arrived={arrived} />
+          </m.div>
 
           {character}
         </div>

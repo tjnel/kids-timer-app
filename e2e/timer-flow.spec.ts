@@ -209,6 +209,39 @@ test.describe("Kids mouse timer", () => {
     await expect(page.getByText("The mouse eats cheese, then runs home.")).toBeVisible()
   })
 
+  test("the finishing tune lasts several seconds and stops when the celebration is closed", async ({ page }) => {
+    // Records how far ahead each note is scheduled to start and stop.
+    await page.addInitScript(() => {
+      const sound = { starts: [] as number[], stops: [] as number[] }
+      ;(window as unknown as { __sound: typeof sound }).__sound = sound
+      const { start, stop } = OscillatorNode.prototype
+      OscillatorNode.prototype.start = function (when = 0) {
+        sound.starts.push(when - this.context.currentTime)
+        start.call(this, when)
+      }
+      OscillatorNode.prototype.stop = function (when = 0) {
+        sound.stops.push(when - this.context.currentTime)
+        stop.call(this, when)
+      }
+    })
+    const sound = () =>
+      page.evaluate(() => (window as unknown as { __sound: { starts: number[]; stops: number[] } }).__sound)
+
+    await page.goto(SHORT_RUN_URL)
+    await startTimer(page)
+    await expect(page.getByRole("dialog")).toBeVisible({ timeout: SHORT_RUN_TIMEOUT })
+
+    // Ticks start at once; only the tune schedules notes seconds ahead.
+    await expect.poll(async () => Math.max(...(await sound()).starts)).toBeGreaterThan(5)
+    const stopsWhilePlaying = (await sound()).stops.length
+
+    await page.getByTestId("play-again").click()
+    await expect(page.getByRole("dialog")).toHaveCount(0)
+    const stopsOnClose = (await sound()).stops.slice(stopsWhilePlaying)
+    expect(stopsOnClose.length, "notes cut off on close").toBeGreaterThan(10)
+    expect(Math.max(...stopsOnClose), "cut off at once").toBeLessThan(0.2)
+  })
+
   test("Escape closes the celebration", async ({ page }) => {
     await page.goto(SHORT_RUN_URL)
     await startTimer(page)
@@ -223,7 +256,8 @@ test.describe("Kids mouse timer", () => {
     await page.goto("/")
     await page.getByRole("radio", { name: "Race Car" }).click()
     await expect(page.getByRole("heading", { name: "Race Timer" })).toBeVisible()
-    await expect(page.getByText("The car passes a cone each interval.")).toBeVisible()
+    await expect(page.getByText("The car zooms past cones to the finish.")).toBeVisible()
+    await expect(page.getByText("4 cones")).toBeVisible()
 
     await page.getByRole("button", { name: "Start timer" }).click()
     await expect(page.getByRole("button", { name: "Hold to pause" })).toBeVisible()
@@ -232,5 +266,96 @@ test.describe("Kids mouse timer", () => {
     await page.getByRole("button", { name: "Back to setup" }).click()
     await expect(page.getByRole("button", { name: "Start timer" })).toBeVisible()
     await expect(page.getByRole("heading", { name: "Race Timer" })).toBeVisible()
+  })
+
+  test("theme and piece length follow the arrow keys as radio groups", async ({ page }) => {
+    await page.goto("/")
+    const mouse = page.getByRole("radio", { name: "Mouse & Cheese" })
+    const race = page.getByRole("radio", { name: "Race Car" })
+
+    await mouse.focus()
+    await page.keyboard.press("ArrowRight")
+    await expect(race).toBeChecked()
+    await expect(race).toBeFocused()
+    await expect(page.getByRole("heading", { name: "Race Timer" })).toBeVisible()
+
+    // The group is one tab stop, and the arrows wrap around.
+    await expect(mouse).toHaveAttribute("tabindex", "-1")
+    await page.keyboard.press("ArrowRight")
+    await expect(mouse).toBeChecked()
+    await expect(mouse).toBeFocused()
+
+    const halfMinute = page.getByRole("radio", { name: "30 sec" })
+    const wholeMinute = page.getByRole("radio", { name: "1 min" })
+    await halfMinute.focus()
+    await page.keyboard.press("End")
+    await expect(wholeMinute).toBeChecked()
+    await expect(wholeMinute).toBeFocused()
+    await page.keyboard.press("Home")
+    await expect(halfMinute).toBeChecked()
+  })
+
+  test("Page Up and Page Down move the slider five pieces at a time", async ({ page }) => {
+    await page.goto("/")
+    const slider = page.getByRole("slider", { name: "Minutes" })
+    await slider.focus()
+
+    await page.keyboard.press("PageUp")
+    await expect(slider).toHaveAttribute("aria-valuenow", "4.5")
+    await page.keyboard.press("PageDown")
+    await expect(slider).toHaveAttribute("aria-valuenow", "2")
+    await page.keyboard.press("PageDown")
+    await expect(slider).toHaveAttribute("aria-valuenow", "0.5")
+    await expect(page.getByText("0:30")).toBeVisible()
+  })
+
+  test("a zero or negative ?minutes falls back to the default length", async ({ page }) => {
+    for (const query of ["0", "-3", "abc"]) {
+      await page.goto(`/?minutes=${query}`)
+      await expect(page.getByText("2:00")).toBeVisible()
+      await expect(page.getByRole("slider", { name: "Minutes" })).toHaveAttribute("aria-valuenow", "2")
+    }
+  })
+
+  test("focus follows the screen: pause after Start, Start after Back", async ({ page }) => {
+    await page.goto("/?minutes=10")
+    const start = page.getByRole("button", { name: "Start timer" })
+    await start.focus()
+
+    // Holding Enter starts the timer once; the repeating key must not pause it.
+    await page.keyboard.down("Enter")
+    const pause = page.getByRole("button", { name: "Hold to pause" })
+    await expect(pause).toBeFocused()
+    await page.keyboard.down("Enter")
+    await page.keyboard.down("Enter")
+    await page.keyboard.up("Enter")
+    await expect(pause).toBeVisible()
+    await expect(page.getByRole("button", { name: "Play" })).toHaveCount(0)
+
+    await page.getByRole("button", { name: "Back to setup" }).focus()
+    await page.keyboard.press("Enter")
+    await expect(start).toBeFocused()
+  })
+
+  test("pausing announces itself and the finished run cannot be paused", async ({ page }) => {
+    await page.goto(SHORT_RUN_URL)
+    await startTimer(page)
+    const pause = page.getByRole("button", { name: "Hold to pause" })
+    await pause.focus()
+    await page.keyboard.press("Enter")
+    await expect(page.getByRole("status")).toHaveText("Paused")
+    await page.getByRole("button", { name: "Play" }).press("Enter")
+    await expect(page.getByRole("status")).toHaveText("Running")
+
+    await expect(page.getByRole("dialog")).toBeVisible({ timeout: SHORT_RUN_TIMEOUT })
+    // Behind the celebration nothing is reachable, and Escape works wherever focus is.
+    await expect(page.locator("[inert]").getByRole("button", { name: "Hold to reset" })).toHaveCount(1)
+    await expect(page.getByRole("button", { name: "Hold to pause" })).toBeDisabled()
+    await page.getByRole("heading", { name: "All done!" }).click()
+    await page.keyboard.press("Tab")
+    await expect(page.getByTestId("play-again")).toBeFocused()
+    await page.keyboard.press("Escape")
+    await expect(page.getByRole("dialog")).toHaveCount(0)
+    await expect(page.getByRole("button", { name: "Start timer" })).toBeFocused()
   })
 })

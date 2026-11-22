@@ -9,7 +9,10 @@ function vibrate(pattern: number | number[]) {
   if ("vibrate" in navigator) navigator.vibrate(pattern)
 }
 
-/** Sound and haptics that follow the timer: a tick each second, a chomp per piece, a fanfare at the end. */
+/**
+ * Sound and haptics that follow the timer: a tick each second, a chomp per
+ * piece, and a tune at the end that stops as soon as the celebration is closed.
+ */
 export function useTimerFeedback({
   timer,
   theme,
@@ -23,7 +26,7 @@ export function useTimerFeedback({
   audio: KidsAudio
   celebrating: boolean
 }) {
-  const { playTick, playChomp, playFanfare } = audio
+  const { playTick, playChomp, playFanfare, stopFanfare } = audio
   const lastTickSecond = useRef<number | null>(null)
 
   useEffect(() => {
@@ -48,5 +51,6 @@ export function useTimerFeedback({
     if (!celebrating) return
     vibrate([100, 50, 100, 50, 200, 100, 300])
     playFanfare()
-  }, [celebrating, playFanfare])
+    return stopFanfare
+  }, [celebrating, playFanfare, stopFanfare])
 }

@@ -1,7 +1,7 @@
 "use client"
 
-import { useCallback, useRef, useState } from "react"
-import { AnimatePresence, motion } from "framer-motion"
+import { useCallback, useEffect, useRef, useState } from "react"
+import { AnimatePresence, m } from "framer-motion"
 import { formatClock, intervalSeconds, intervalsFor, MAX_MINUTES, snapMinutes, type IntervalType } from "@/hooks/use-timer"
 import { ConfettiBurst } from "./confetti-burst"
 
@@ -9,11 +9,16 @@ interface TimeSelectorProps {
   minutes: number
   onMinutesChange: (minutes: number) => void
   intervalType: IntervalType
+  /** What one grid piece is called: "piece"/"pieces", "cone"/"cones". */
+  unit: { singular: string; plural: string }
 }
 
 const PRESETS = [1, 2, 3, 5, 10, 15]
 const LABELLED_TICKS = new Set([5, 10, MAX_MINUTES])
 const BURST_THROTTLE_MS = 280
+/** Just past the slowest confetti piece (2.25 s fall + 0.36 s delay). */
+const BURST_LIFETIME_MS = 2800
+const PAGE_STEPS = 5
 
 function clockForMinutes(mins: number) {
   return formatClock(mins * 60)
@@ -27,10 +32,17 @@ function tickLeft(value: number, minMinutes: number) {
   return ((value - minMinutes) / (MAX_MINUTES - minMinutes)) * 100
 }
 
-export function TimeSelector({ minutes, onMinutesChange, intervalType }: TimeSelectorProps) {
+export function TimeSelector({ minutes, onMinutesChange, intervalType, unit }: TimeSelectorProps) {
   const sliderRef = useRef<HTMLDivElement>(null)
   const [burst, setBurst] = useState(0)
   const lastBurstAt = useRef(0)
+
+  // Take the confetti out of the page once it has fallen.
+  useEffect(() => {
+    if (burst === 0) return
+    const id = window.setTimeout(() => setBurst(0), BURST_LIFETIME_MS)
+    return () => window.clearTimeout(id)
+  }, [burst])
   const step = intervalSeconds(intervalType) / 60
   const minMinutes = step
   const position = Math.max(0, Math.min(1, (minutes - minMinutes) / (MAX_MINUTES - minMinutes)))
@@ -76,17 +88,18 @@ export function TimeSelector({ minutes, onMinutesChange, intervalType }: TimeSel
   }
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    const target =
-      event.key === "ArrowRight" || event.key === "ArrowUp"
-        ? minutes + step
-        : event.key === "ArrowLeft" || event.key === "ArrowDown"
-          ? minutes - step
-          : event.key === "Home"
-            ? minMinutes
-            : event.key === "End"
-              ? MAX_MINUTES
-              : null
-    if (target === null) return
+    const targets: Record<string, number> = {
+      ArrowRight: minutes + step,
+      ArrowUp: minutes + step,
+      ArrowLeft: minutes - step,
+      ArrowDown: minutes - step,
+      PageUp: minutes + step * PAGE_STEPS,
+      PageDown: minutes - step * PAGE_STEPS,
+      Home: minMinutes,
+      End: MAX_MINUTES,
+    }
+    const target = targets[event.key]
+    if (target === undefined) return
     event.preventDefault()
     change(target)
   }
@@ -96,13 +109,13 @@ export function TimeSelector({ minutes, onMinutesChange, intervalType }: TimeSel
   const firstTick = ticks[0] ?? MAX_MINUTES
 
   return (
-    <div className="flex w-full min-w-0 flex-col items-center gap-3 sm:gap-4 short:gap-1">
+    <div className="flex w-full min-w-0 flex-col items-center gap-3 sm:gap-4 compact:gap-2 short:gap-1">
       <div className="text-center">
-        <p className="text-5xl font-extrabold tracking-tight text-foreground tabular-nums sm:text-6xl short:text-4xl">
+        <p className="text-5xl font-extrabold tracking-tight text-foreground tabular-nums sm:text-6xl sm:compact:text-5xl short:text-4xl">
           {clockForMinutes(minutes)}
         </p>
         <p className="mt-0.5 text-base font-semibold text-foreground-strong">
-          {pieces} {pieces === 1 ? "piece" : "pieces"}
+          {pieces} {pieces === 1 ? unit.singular : unit.plural}
         </p>
       </div>
 
@@ -112,17 +125,18 @@ export function TimeSelector({ minutes, onMinutesChange, intervalType }: TimeSel
           role="slider"
           tabIndex={0}
           aria-label="Minutes"
-          aria-valuemin={minMinutes}
+          // A `?minutes=` length can sit below one piece; the range still has to contain it.
+          aria-valuemin={Math.min(minMinutes, minutes)}
           aria-valuemax={MAX_MINUTES}
           aria-valuenow={minutes}
           aria-valuetext={clockForMinutes(minutes)}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onKeyDown={handleKeyDown}
-          className="relative h-12 cursor-pointer touch-none rounded-full select-none focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-foreground-strong sm:h-14"
+          className="relative h-12 cursor-pointer touch-none rounded-full select-none focus-visible:outline-4 focus-visible:outline-offset-0 focus-visible:outline-foreground-strong sm:h-14"
         >
           <div className="absolute top-1/2 right-0 left-0 h-3 -translate-y-1/2 rounded-full bg-track" />
-          <motion.div
+          <m.div
             className="absolute top-1/2 left-0 h-3 -translate-y-1/2 rounded-full bg-primary"
             initial={false}
             animate={{ width: `${position * 100}%` }}
@@ -137,15 +151,15 @@ export function TimeSelector({ minutes, onMinutesChange, intervalType }: TimeSel
               />
             ))}
           </div>
-          <motion.div
+          <m.div
             className="absolute top-1/2 flex size-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-primary text-base font-bold text-primary-foreground shadow-[0_3px_0_rgba(46,26,8,0.35)]"
             initial={false}
             animate={{ left: `${position * 100}%` }}
             transition={{ type: "spring", stiffness: 400, damping: 36 }}
             aria-hidden="true"
           >
-            {Math.floor(minutes) > 0 ? Math.floor(minutes) : ""}
-          </motion.div>
+            {minutes < 1 ? tickLabel(minutes) : Math.floor(minutes)}
+          </m.div>
         </div>
         <div aria-hidden="true" className="relative h-5">
           {ticks
@@ -167,7 +181,7 @@ export function TimeSelector({ minutes, onMinutesChange, intervalType }: TimeSel
         {PRESETS.map((preset) => {
           const selected = minutes === preset
           return (
-            <motion.button
+            <m.button
               type="button"
               key={preset}
               aria-pressed={selected}
@@ -178,14 +192,14 @@ export function TimeSelector({ minutes, onMinutesChange, intervalType }: TimeSel
               }`}
             >
               {preset}m
-            </motion.button>
+            </m.button>
           )
         })}
       </div>
 
       <AnimatePresence>
         {burst > 0 && (
-          <motion.div
+          <m.div
             key={burst}
             initial={{ opacity: 1 }}
             animate={{ opacity: 1 }}
@@ -193,7 +207,7 @@ export function TimeSelector({ minutes, onMinutesChange, intervalType }: TimeSel
             className="pointer-events-none fixed inset-0 z-30"
           >
             <ConfettiBurst pieceCount={48} />
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
     </div>

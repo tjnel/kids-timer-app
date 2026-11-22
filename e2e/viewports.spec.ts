@@ -22,10 +22,15 @@ const TABLETS = [
   { name: "ipad-air", width: 820, height: 1180 },
   { name: "ipad-pro-11", width: 834, height: 1194 },
 ]
+// Laptop browser windows: wide, but with little height left under the browser's own bars.
+const LAPTOPS = [
+  { name: "laptop-720p", width: 1280, height: 720 },
+  { name: "laptop-window", width: 1280, height: 650 },
+]
 const landscape = (list: typeof PHONES) =>
   list.map(({ name, width, height }) => ({ name: `${name}-landscape`, width: height, height: width }))
 
-const ALL = [...PHONES, ...landscape(PHONES), ...TABLETS, ...landscape(TABLETS)]
+const ALL = [...PHONES, ...landscape(PHONES), ...TABLETS, ...landscape(TABLETS), ...LAPTOPS]
 const MIN_TARGET = 44
 const MIN_CELL = 40
 
@@ -108,6 +113,8 @@ test.describe("Viewport sweep", () => {
       await noHorizontalOverflow(page)
       await fullyInViewport(page, page.getByRole("button", { name: "Hold to pause" }), "pause")
       await fullyInViewport(page, page.getByRole("button", { name: "Hold to reset" }), "reset")
+      await fullyInViewport(page, page.getByText("Hold to pause", { exact: true }), "pause label")
+      await fullyInViewport(page, page.getByText("Hold to reset", { exact: true }), "reset label")
       await fullyInViewport(page, page.getByRole("button", { name: "Back to setup" }), "back")
       await fullyInViewport(page, page.getByTestId("remaining-time"), "time")
       await fullyInViewport(page, page.getByTestId("goal"), "goal cell")

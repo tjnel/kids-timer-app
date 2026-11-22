@@ -2,12 +2,10 @@
 
 export function IconButton({
   label,
-  pressed,
   onClick,
   children,
 }: {
   label: string
-  pressed?: boolean
   onClick: () => void
   children: React.ReactNode
 }) {
@@ -15,7 +13,6 @@ export function IconButton({
     <button
       type="button"
       aria-label={label}
-      aria-pressed={pressed}
       onClick={onClick}
       className="relative flex size-12 shrink-0 items-center justify-center rounded-full bg-card text-card-foreground shadow-[0_3px_0_rgba(46,26,8,0.28)] focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-foreground-strong active:translate-y-0.5 active:shadow-[0_1px_0_rgba(46,26,8,0.28)] sm:size-11"
     >

@@ -1,12 +1,13 @@
 {
+  "id": "/",
   "name": "Kids Timer",
   "short_name": "Kids Timer",
-  "description": "A fun visual timer for kids with mouse and race car themes",
+  "description": "Free visual countdown timer for toddlers and young children. Set up to 15 minutes and watch a mouse eat cheese or a race car pass cones. Works offline, no ads.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#a08260",
   "theme_color": "#a08260",
-  "orientation": "portrait",
   "icons": [
     {
       "src": "/icon-192.png",

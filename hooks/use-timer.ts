@@ -18,6 +18,8 @@ type Phase =
 
 const UI_TICK_MS = 50
 export const MAX_MINUTES = 15
+/** Shortest length `?minutes=` accepts: six seconds, for exercising a whole run quickly. */
+export const MIN_URL_MINUTES = 0.1
 
 type RunningPhase = Extract<Phase, { kind: "running" }>
 
@@ -83,7 +85,11 @@ export function useTimer({ initialMinutes, intervalType }: UseTimerOptions) {
       ? totalIntervals
       : Math.min(totalIntervals, Math.floor(elapsed / intervalDuration))
   const intervalElapsedSeconds = phase.kind === "done" ? intervalDuration : elapsed % intervalDuration
-  const currentIntervalProgress = Math.min(1, intervalElapsedSeconds / intervalDuration)
+  // A length that is not a whole number of pieces (only reachable through
+  // `?minutes=`) ends on a shorter piece; its progress runs over its own length.
+  const pieceSeconds = Math.min(intervalDuration, configuredTotal - completedIntervals * intervalDuration)
+  const currentIntervalProgress =
+    phase.kind === "done" || pieceSeconds <= 0 ? 1 : Math.min(1, intervalElapsedSeconds / pieceSeconds)
 
   useEffect(() => {
     if (phase.kind !== "running") return
